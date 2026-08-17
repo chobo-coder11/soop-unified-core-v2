@@ -1,0 +1,2 @@
+import test from'node:test';import assert from'node:assert/strict';import{PROVIDER_PROVENANCE}from'../src/core/provider-provenance.js';
+test('providers reading the same SOOP official HTTP upstream are not counted as independent sources',()=>{const group=PROVIDER_PROVENANCE.native.independenceGroup;for(const p of['reindeer','soopapi','soop4j'] as const)assert.equal(PROVIDER_PROVENANCE[p].independenceGroup,group);assert.notEqual(PROVIDER_PROVENANCE.soopjs.independenceGroup,group);});
