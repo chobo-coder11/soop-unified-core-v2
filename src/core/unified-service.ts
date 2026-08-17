@@ -1,0 +1,23 @@
+import type { AppConfig } from '../config.js';
+import type { ChannelSnapshot, LiveSnapshot, UnifiedResult } from '../types.js';
+import { ProviderRegistry } from './provider-registry.js';
+import { RawPacketStore } from './raw-store.js';
+import { Metrics } from './metrics.js';
+import { ConnectionPool } from './connection-pool.js';
+import { SingleFlightCache } from './single-flight-cache.js';
+import { AuthSessionManager } from './auth-sessions.js';
+import { RuntimeMonitor } from './runtime-monitor.js';
+
+export class UnifiedService {
+ readonly providers:ProviderRegistry;readonly raw:RawPacketStore;readonly metrics:Metrics;readonly pool:ConnectionPool;readonly auth:AuthSessionManager;readonly runtime:RuntimeMonitor;
+ private liveCache:SingleFlightCache<UnifiedResult<LiveSnapshot>>;private channelCache:SingleFlightCache<UnifiedResult<ChannelSnapshot>>;
+ constructor(readonly cfg:AppConfig){this.metrics=new Metrics();this.providers=new ProviderRegistry(cfg,this.metrics);this.raw=new RawPacketStore(cfg.rawBufferPerStream);this.pool=new ConnectionPool(cfg,this.providers,this.raw,this.metrics);this.auth=new AuthSessionManager(cfg,this.metrics);this.runtime=new RuntimeMonitor(this.metrics);this.liveCache=new SingleFlightCache(cfg.liveCacheMs,2000,cfg.cacheStaleIfErrorMs);this.channelCache=new SingleFlightCache(cfg.channelCacheMs,2000,Math.max(cfg.cacheStaleIfErrorMs,cfg.channelCacheMs))}
+ private withFreshness<T>(result:UnifiedResult<T>,freshness:{state:'fresh'|'stale';ageMs:number;staleReason?:string}):UnifiedResult<T>{const confidence=freshness.state==='stale'?Math.min(result.confidence,Math.max(.05,result.confidence*Math.max(.2,1-freshness.ageMs/Math.max(1,this.cfg.cacheStaleIfErrorMs+this.cfg.channelCacheMs)))):result.confidence;return{...result,confidence,freshness}}
+ async live(id:string,bypassCache=false){this.metrics.inc('soop_rest_live_requests_total');const x=await this.liveCache.getWithMeta(id,()=>this.providers.live(id),bypassCache);return this.withFreshness(x.value,x.freshness)}
+ async channel(id:string,bypassCache=false){this.metrics.inc('soop_rest_channel_requests_total');const x=await this.channelCache.getWithMeta(id,()=>this.providers.channel(id),bypassCache);return this.withFreshness(x.value,x.freshness)}
+ async viewers(id:string,bypassCache=false){const x=await this.live(id,bypassCache);return{streamerId:id,viewerCount:x.data.viewerCount,online:x.data.online,onlineState:x.consensus.onlineState,confidence:x.confidence,source:x.source,corroboratedBy:x.corroboratedBy,consensus:x.consensus,observedAt:x.observedAt,freshness:x.freshness}}
+ async state(id:string,bypassCache=false){const[live,channel]=await Promise.allSettled([this.live(id,bypassCache),this.channel(id,bypassCache)]);const errors:Record<string,string>={};if(live.status==='rejected')errors.live=live.reason instanceof Error?live.reason.message:String(live.reason);if(channel.status==='rejected')errors.channel=channel.reason instanceof Error?channel.reason.message:String(channel.reason);if(live.status==='rejected'&&channel.status==='rejected')throw new Error(`All state sources failed: live=${errors.live}; channel=${errors.channel}`);const connection=this.pool.list().find(x=>x.streamerId===id);return{streamerId:id,partial:Object.keys(errors).length>0,errors:Object.keys(errors).length?errors:undefined,live:live.status==='fulfilled'?live.value:undefined,channel:channel.status==='fulfilled'?channel.value:undefined,connection,collectionIntegrity:connection?.integrity??(Object.keys(errors).length?'degraded':'unknown')}}
+ diagnostics(){return{providers:this.providers.health(),reliability:this.providers.reliabilitySnapshot(),drift:this.pool.drift.snapshot(),incidents:this.raw.incidents(20),flightRecordings:this.raw.flightRecordings(5),anomalies:this.raw.recentAnomalies(50),runtime:{memory:process.memoryUsage(),uptimeSec:Math.floor(process.uptime())}}}
+ async batch(kind:'live'|'channel'|'viewers'|'state',ids:string[],bypassCache=false){const unique=[...new Set(ids)],results:Record<string,unknown>={};let cursor=0;const worker=async()=>{while(true){const i=cursor++;if(i>=unique.length)return;const id=unique[i];try{results[id]=kind==='live'?await this.live(id,bypassCache):kind==='channel'?await this.channel(id,bypassCache):kind==='viewers'?await this.viewers(id,bypassCache):await this.state(id,bypassCache)}catch(e){results[id]={error:e instanceof Error?e.message:String(e)}}}};const count=Math.min(Math.max(1,this.cfg.batchConcurrency),unique.length||1);await Promise.all(Array.from({length:count},worker));return{kind,count:unique.length,results}}
+ async close(){this.runtime.close();await this.auth.close();await this.pool.close();await this.providers.close()}
+}

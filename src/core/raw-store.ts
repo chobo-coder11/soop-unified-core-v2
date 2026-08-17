@@ -1,0 +1,17 @@
+import type{CanonicalEvent,ProtocolAnomaly,ProtocolDriftIncident,ProtocolIncidentBundle,RawPacketRecord}from'../types.js';
+
+class RingBuffer<T>{private data:Array<T|undefined>;private start=0;private count=0;constructor(readonly capacity:number){this.data=new Array(capacity)}push(v:T){const i=(this.start+this.count)%this.capacity;if(this.count<this.capacity){this.data[i]=v;this.count++}else{this.data[this.start]=v;this.start=(this.start+1)%this.capacity}}toArray(){const out:T[]=[];for(let i=0;i<this.count;i++){const v=this.data[(this.start+i)%this.capacity];if(v!==undefined)out.push(v)}return out}sliceLast(n:number){const a=this.toArray();return a.slice(-n)}}
+const fastSignature=(s:string)=>{let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return(h>>>0).toString(16).padStart(8,'0')}
+
+export class RawPacketStore{
+ private byStream=new Map<string,RingBuffer<RawPacketRecord>>();private unknown=new Map<string,{count:number;firstSeen:string;lastSeen:string;code:number;type:string;streams:Set<string>}>();private anomalies:ProtocolAnomaly[]=[];private incidentLog:ProtocolDriftIncident[]=[];private bundles:ProtocolIncidentBundle[]=[];
+ constructor(private limit=1000,private anomalyLimit=2000,private incidentLimit=100,private unknownLimit=5000){}
+ push(e:CanonicalEvent){if(!e.raw)return;const sig=fastSignature(e.raw),r={streamerId:e.streamerId,code:e.code,type:e.type,receivedAt:e.receivedAt,raw:e.raw,signature:sig};let ring=this.byStream.get(e.streamerId);if(!ring){ring=new RingBuffer(this.limit);this.byStream.set(e.streamerId,ring)}ring.push(r);if(e.category==='unknown'){const k=`${e.code}:${sig}`,old=this.unknown.get(k);this.unknown.set(k,{count:(old?.count??0)+1,firstSeen:old?.firstSeen??e.receivedAt,lastSeen:e.receivedAt,code:e.code,type:e.type,streams:new Set([...(old?.streams??[]),e.streamerId])});if(this.unknown.size>this.unknownLimit){const oldest=[...this.unknown.entries()].sort((a,b)=>Date.parse(a[1].lastSeen)-Date.parse(b[1].lastSeen));for(let i=0;i<oldest.length-Math.floor(this.unknownLimit*.8);i++)this.unknown.delete(oldest[i][0])}}}
+ pushAnomaly(a:ProtocolAnomaly){if(a.raw&&!a.signature)a.signature=fastSignature(a.raw);this.anomalies.push(a);if(this.anomalies.length>this.anomalyLimit)this.anomalies.splice(0,this.anomalies.length-this.anomalyLimit)}
+ recordIncident(i:ProtocolDriftIncident){this.incidentLog.push(i);if(this.incidentLog.length>this.incidentLimit)this.incidentLog.shift();const streamSet=new Set(i.sampleStreams),packets=i.sampleStreams.flatMap(id=>this.byStream.get(id)?.sliceLast(25)??[]).slice(-300),anomalies=this.anomalies.filter(a=>streamSet.has(a.streamerId)).slice(-100);this.bundles.push({incident:i,capturedAt:new Date().toISOString(),packets,anomalies});if(this.bundles.length>this.incidentLimit)this.bundles.shift()}
+ recent(id:string,limit=100){return this.byStream.get(id)?.sliceLast(Math.max(1,Math.min(limit,this.limit)))??[]}
+ recentAnomalies(limit=100){return this.anomalies.slice(-Math.max(1,Math.min(limit,this.anomalyLimit))).reverse()}
+ incidents(limit=50){return this.incidentLog.slice(-Math.max(1,Math.min(limit,this.incidentLimit))).reverse()}
+ flightRecordings(limit=10){return this.bundles.slice(-Math.max(1,Math.min(limit,this.incidentLimit))).reverse()}
+ unknownSummary(){return[...this.unknown.entries()].map(([signature,v])=>({signature,count:v.count,firstSeen:v.firstSeen,lastSeen:v.lastSeen,code:v.code,type:v.type,affectedStreams:v.streams.size})).sort((a,b)=>b.count-a.count)}
+}

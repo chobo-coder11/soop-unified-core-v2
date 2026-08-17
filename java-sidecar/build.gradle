@@ -1,0 +1,10 @@
+plugins { id 'java'; id 'application' }
+group='io.soop.unified'; version='2.4.0'
+repositories { mavenCentral(); maven { url='https://jitpack.io' } }
+dependencies {
+  implementation 'com.github.getCurrentThread:soopapi:v0.14.0'
+  implementation 'kr.zzik2:soop4j:0.0.3'
+  implementation 'com.google.code.gson:gson:2.11.0'
+}
+java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
+application { mainClass = 'io.soop.unified.sidecar.SidecarServer' }

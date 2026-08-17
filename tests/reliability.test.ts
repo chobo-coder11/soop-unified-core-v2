@@ -1,0 +1,7 @@
+import test from'node:test';import assert from'node:assert/strict';import{AdaptiveReliability}from'../src/core/adaptive-reliability.js';
+const fail=(provider:any)=>({provider,ok:false,latencyMs:4000,observedAt:new Date().toISOString(),error:'x'} as any);
+test('repeated live failures reduce only live signal weight',()=>{const r=new AdaptiveReliability(),live0=r.weight('soopapi','live'),channel0=r.weight('soopapi','channel');for(let i=0;i<8;i++)r.record('live',[fail('soopapi')]);assert.ok(r.weight('soopapi','live')<live0*.7);assert.equal(r.weight('soopapi','channel'),channel0)});
+test('consensus disagreement alone does not penalize provider',()=>{const r=new AdaptiveReliability(),before=r.weight('native','live');for(let i=0;i<8;i++)r.record('live',[{provider:'native',ok:true,latencyMs:10,observedAt:new Date().toISOString(),value:{online:false}}] as any);assert.ok(r.weight('native','live')>=before*.95)});
+test('verified error evidence reduces future provider weight',()=>{const r=new AdaptiveReliability(),before=r.weight('soop4j','channel');for(let i=0;i<5;i++)r.recordVerifiedError('soop4j','channel',.8);assert.ok(r.weight('soop4j','channel')<before)});
+
+test('verified error penalty decays after sustained success',()=>{const r=new AdaptiveReliability();for(let i=0;i<5;i++)r.recordVerifiedError('native','live',1);const penalized=r.weight('native','live');for(let i=0;i<20;i++)r.record('live',[{provider:'native',ok:true,latencyMs:10,observedAt:new Date().toISOString(),value:{online:true}}] as any);assert.ok(r.weight('native','live')>penalized)});

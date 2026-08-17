@@ -1,0 +1,5 @@
+import{parsePacket}from'./packet.js';import{decodePacket}from'./decoders.js';import type{CanonicalEvent}from'../types.js';
+const MAX_FIXTURE_PACKET_BYTES=4*1024*1024;
+export function encodeFixturePackets(packets:string[]){const chunks:Buffer[]=[];for(const packet of packets){const body=Buffer.from(packet,'utf8'),header=Buffer.allocUnsafe(4);header.writeUInt32BE(body.length,0);chunks.push(header,body)}return Buffer.concat(chunks)}
+export function readFixtureBuffer(buffer:Buffer){const packets:string[]=[];let offset=0;while(offset<buffer.length){if(buffer.length-offset<4)throw new Error('fixture truncated before length header');const length=buffer.readUInt32BE(offset);offset+=4;if(length<1||length>MAX_FIXTURE_PACKET_BYTES)throw new Error(`invalid fixture packet length ${length}`);if(buffer.length-offset<length)throw new Error('fixture truncated inside packet');packets.push(buffer.subarray(offset,offset+length).toString('utf8'));offset+=length}return packets}
+export function replayFixtureBuffer(streamerId:string,buffer:Buffer):CanonicalEvent[]{return readFixtureBuffer(buffer).map(raw=>decodePacket(streamerId,parsePacket(raw),'native'))}

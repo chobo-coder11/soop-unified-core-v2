@@ -1,0 +1,44 @@
+SOOP Unified Core v2.4.0 P0 PRODUCTION HARDENED — HANDOFF VALIDATION REPORT
+Validation date: 2026-08-17 (Asia/Seoul)
+
+LOCAL PASSES
+- repository integrity: PASS
+- clean TypeScript compile: PASS
+- compiled regression tests: 46 passed / 0 failed (2 WS runtime integration tests skipped locally because the offline validation workspace lacks the installed `ws` runtime package)
+- security-source regression: PASS
+- provider deadline regression: PASS
+- stale metadata regression: PASS
+- field-consensus regression: PASS
+- reliability self-confirmation regression: PASS
+
+P0 IMPLEMENTED
+- provider hard deadlines + partial success
+- partial /state recovery
+- explicit stale freshness + confidence decay
+- signal-isolated adaptive reliability
+- field-level channel consensus
+- WS v4 gap/replay/resume + subscription serialization
+- close-during-subscribe ref leak guard
+- drift/dedup/raw hot-path optimization
+- connection timeline + possible gap history
+- runtime CPU/memory/event-loop metrics
+- /studio operator UI
+- /livez + /readyz health endpoints
+- REST+WS soak runner
+
+NOT CLAIMED AS LOCALLY VERIFIED
+- real SOOP public-network smoke
+- 24-72h multi-stream real-network soak
+- clean npm registry install in an unrestricted network
+- Docker daemon build in this sandbox
+- actual JDK25/Gradle remote dependency build
+
+Use GitHub Actions plus real-network smoke/soak as the production gate.
+
+HOT-PATH MICROBENCH (LOCAL SYNTHETIC, NOT A PRODUCTION THROUGHPUT CLAIM)
+- 50,000 synthetic canonical events through drift + dedup: ~291.6 ms in this workspace (~171k events/s)
+- purpose: regression guard against obvious per-event full-window scanning, not capacity certification
+
+UI/DX CHECK
+- Studio HTML emitted successfully
+- extracted Studio browser JavaScript: node --check PASS

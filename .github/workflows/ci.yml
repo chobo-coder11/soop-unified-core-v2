@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repository-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify complete repository tree
+        run: |
+          test -d src
+          test -d tests
+          test -d docs
+          test -d scripts
+          test -d java-sidecar
+          test -f src/index.ts
+          test -f java-sidecar/src/main/java/io/soop/unified/sidecar/SidecarServer.java
+          node scripts/verify-repository.mjs
+
+  node-core:
+    runs-on: ubuntu-latest
+    needs: repository-integrity
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install core dependencies
+        run: npm install --omit=optional
+      - name: Build
+        run: npm run build
+      - name: Source unit/regression tests
+        run: npm test
+      - name: Compiled output regression tests
+        run: npm run test:compiled
+
+  java-sidecar:
+    runs-on: ubuntu-latest
+    needs: repository-integrity
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.3.1'
+          cache-provider: basic
+      - name: Compile Java sidecar
+        run: gradle -p java-sidecar clean installDist --no-daemon
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [repository-integrity, node-core, java-sidecar]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build Node image
+        run: docker build -t soop-unified-core:ci .
+      - name: Build Java sidecar image
+        run: docker build -t soop-unified-sidecar:ci ./java-sidecar

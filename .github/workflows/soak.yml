@@ -1,0 +1,46 @@
+name: SOOP Soak Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      streamer_ids:
+        description: Comma-separated public SOOP streamer IDs
+        required: true
+        default: bach023
+      duration_seconds:
+        description: Soak duration in seconds
+        required: true
+        default: '900'
+
+permissions:
+  contents: read
+
+jobs:
+  soak:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm install --omit=optional
+      - run: npm run build
+      - name: Start native-only core
+        env:
+          SOOP_ENABLE_JAVA_SIDECAR: 'false'
+          SOOP_ENABLE_REINDEER_PROVIDER: 'false'
+          SOOP_ENABLE_SOOPJS_PROVIDER: 'false'
+        run: |
+          node dist/src/index.js > soak-server.log 2>&1 &
+          echo $! > soak-server.pid
+          for i in {1..30}; do curl -fsS http://127.0.0.1:8080/v1/health && break; sleep 1; done
+      - name: Run soak polling
+        env:
+          STREAMER_IDS: ${{ inputs.streamer_ids }}
+          SOAK_DURATION_SECONDS: ${{ inputs.duration_seconds }}
+          UNIFIED_URL: http://127.0.0.1:8080
+        run: node dist/scripts/soak.js
+      - name: Print server log
+        if: always()
+        run: tail -500 soak-server.log || true

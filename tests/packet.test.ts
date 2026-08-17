@@ -1,0 +1,2 @@
+import test from'node:test';import assert from'node:assert/strict';import{buildPacket,parsePacket}from'../src/protocol/packet.js';import{F}from'../src/protocol/constants.js';
+test('packet roundtrip validates UTF-8 wire length',()=>{const raw=buildPacket(5,`${F}한글 chat${F.repeat(6)}`),p=parsePacket(raw);assert.equal(p.code,5);assert.equal(p.parts[0],'한글 chat');assert.equal(p.lengthValid,true);assert.equal(p.declaredLength,p.actualLength)});

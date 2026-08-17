@@ -1,0 +1,41 @@
+name: SOOP Smoke Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      streamer_id:
+        description: Public SOOP streamer ID to test
+        required: true
+        default: bach023
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm install --omit=optional
+      - run: npm run build
+      - name: Start native-only core
+        env:
+          SOOP_ENABLE_JAVA_SIDECAR: 'false'
+          SOOP_ENABLE_REINDEER_PROVIDER: 'false'
+          SOOP_ENABLE_SOOPJS_PROVIDER: 'false'
+        run: |
+          node dist/src/index.js > smoke-server.log 2>&1 &
+          echo $! > smoke-server.pid
+          for i in {1..20}; do curl -fsS http://127.0.0.1:8080/v1/health && break; sleep 1; done
+      - name: Run real endpoint smoke test
+        env:
+          STREAMER_ID: ${{ inputs.streamer_id }}
+          UNIFIED_URL: http://127.0.0.1:8080
+        run: node dist/scripts/smoke.js
+      - name: Print server log on failure
+        if: failure()
+        run: cat smoke-server.log || true

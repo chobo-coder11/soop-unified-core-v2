@@ -1,0 +1,2 @@
+import test from'node:test';import assert from'node:assert/strict';import{httpStatusForError}from'../src/server/errors.js';
+test('client/auth failures map to useful HTTP status codes',()=>{assert.equal(httpStatusForError('invalid_json'),400);assert.equal(httpStatusForError('request_body_too_large'),413);assert.equal(httpStatusForError('invalid auth session'),401);assert.equal(httpStatusForError('write API disabled'),403);assert.equal(httpStatusForError('stream offline'),503);assert.equal(httpStatusForError('upstream blew up'),502)});
