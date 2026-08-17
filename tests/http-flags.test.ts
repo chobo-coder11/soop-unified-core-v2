@@ -1,0 +1,2 @@
+import test from'node:test';import assert from'node:assert/strict';import{soopFlag}from'../src/http/soop-http.js';
+test('SOOP boolean-like password flags do not treat "0" or "N" as protected',()=>{for(const v of[false,null,undefined,0,'0','N','n','false','off',''])assert.equal(soopFlag(v),false,String(v));for(const v of[true,1,'1','Y','yes','true','on','PASSWORD'])assert.equal(soopFlag(v),true,String(v));});
