@@ -1,0 +1,9 @@
+.git
+.github/ISSUE_TEMPLATE
+node_modules
+dist
+.env
+*.log
+.DS_Store
+java-sidecar/.gradle
+java-sidecar/build

@@ -1,0 +1,2 @@
+import test from'node:test';import assert from'node:assert/strict';import{Metrics}from'../src/core/metrics.js';
+test('metrics support labels and histogram output',()=>{const m=new Metrics();m.incLabel('requests_total',{provider:'native'});m.observe('latency_ms',42,{provider:'native'},[10,50,100]);const p=m.prometheus();assert.match(p,/requests_total\{provider="native"\} 1/);assert.match(p,/latency_ms_bucket\{provider="native",le="50"\} 1/);assert.match(p,/latency_ms_count\{provider="native"\} 1/) });

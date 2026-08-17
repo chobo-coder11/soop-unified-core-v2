@@ -1,0 +1,33 @@
+SOOP Unified Core v2.3.0 VERIFIED HARDENED — HANDOFF VALIDATION REPORT
+Date: 2026-08-16 (Asia/Seoul)
+
+RESULTS COMPLETED IN BUILD WORKSPACE
+- Repository integrity: PASS
+- TypeScript strict type-check: PASS
+- Clean TypeScript compile: PASS
+- Compiled regression tests: 41 PASS / 0 FAIL
+- Java sidecar upstream API-shape compile: PASS
+- Security source scan: PASS
+- Package/archive integrity: PASS (final handoff is released only after unzip/file-policy checks)
+
+KEY V2.3 HARDENING
+- Adaptive multi-provider reliability + uncertainty-aware consensus
+- Half-open circuit breaker with adaptive cooldown
+- Secure-by-default TLS
+- Reason-aware reconnect and watchdogs
+- One-to-one cross-provider event dedup
+- Stable provider event-ID retransmit suppression
+- Protocol drift detection + incident RAW flight recordings
+- Bounded RAW/anomaly/drift/rate-limit memory
+- Hash-only write-session token storage and redacted session listing
+- Constant-time API key comparison
+- Downstream WebSocket client/payload/idle/backpressure limits
+- Java soopapi/soop4j parallel observation with caller-aligned timeout budget
+- soopapi-inspired raw packet fixture replay tests
+- Strict numeric config clamping
+- Real-network smoke + soak GitHub workflows
+
+IMPORTANT LIMITATION
+This build environment cannot reach npm/SOOP over DNS, has no Docker daemon, and only has JDK 21 locally. Therefore clean registry install, real JDK25 Gradle dependency build, Docker build, live SOOP integration and long real-network soak are NOT falsely marked as passed. The repository includes CI/smoke/soak gates for those checks.
+
+Do not call the release production-network-certified until those network-capable gates pass.

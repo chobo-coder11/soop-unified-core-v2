@@ -1,0 +1,3 @@
+import test from'node:test';import assert from'node:assert/strict';import{hashSessionToken,sessionRefFromHash}from'../src/core/session-token.js';
+test('auth session token hashing is deterministic and does not expose token',()=>{const token='secret-session-token';const hash=hashSessionToken(token);assert.equal(hash.length,64);assert.notEqual(hash,token);assert.equal(hashSessionToken(token),hash)});
+test('session list reference is short and non-usable',()=>{const hash=hashSessionToken('another-secret');const ref=sessionRefFromHash(hash);assert.equal(ref.length,12);assert.equal(ref,hash.slice(0,12));assert.notEqual(ref,'another-secret')});

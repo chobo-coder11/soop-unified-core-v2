@@ -1,0 +1,165 @@
+# SOOP Unified Core v2.3.0 Verified Hardened
+
+SOOP(구 아프리카TV)를 위한 **비공식 통합 API / 실시간 프로토콜 코어**입니다. 특정 BJ에 고정되지 않고 유효한 SOOP 스트리머 ID를 동적으로 조회·구독할 수 있습니다.
+
+핵심 목표는 단일 비공식 라이브러리를 감싸는 것이 아니라, **TypeScript Native Core가 SOOP HTTP/WebSocket 프로토콜을 직접 처리**하면서 독립 구현들을 fallback/검증 provider로 사용하고, 장애·불일치·프로토콜 변화까지 관측하는 것입니다.
+
+## 참조 / 보조 provider
+
+- `reindeer002/soop` (`soop-extension`) — Node/TypeScript live/channel/chat
+- `getCurrentThread/soopapi` v0.14.0 — Java 25, 광범위 이벤트 디코딩·연결 lifecycle·RAW fixture test
+- `zzik2/soop4j` 0.0.3 — Java live/channel/chat/viewer 조회
+- `taejeong1126/soop.js` — 브라우저 fallback, archived이므로 기본 OFF
+
+## v2.3.0 핵심 고도화
+
+### 데이터 신뢰도
+
+- **Adaptive provider reliability**: 최근 성공률·latency·consensus 불일치를 EWMA로 누적하여 provider weight 자동 조정
+- **Provider provenance**: implementation / transport / upstream family / independence group 구분
+- **Robust consensus**: `confirmed` / `uncertain` / `single-source` 상태 제공
+- viewer count는 weighted median + MAD 기반 outlier 제거 후 합의
+- outlier provider는 다음 요청의 동적 신뢰도에 반영
+- 짧은 upstream 장애에는 `stale-if-error`로 마지막 정상값을 제한 시간 동안 제공
+- 동일 키 동시 요청은 single-flight로 합쳐 upstream fan-out 폭주 방지
+
+### 실시간 연결 / 장애 복구
+
+- Native WebSocket TLS 인증서 검증 **기본 ON** (`SOOP_ALLOW_INSECURE_TLS=false`)
+- JOIN watchdog + inbound liveness watchdog
+- 실패 원인을 `offline / blocked / auth / protocol / transient`로 분류
+- 오프라인은 느린 HTTP 재탐색, 일시 장애는 exponential backoff + jitter
+- 인증·프로토콜 오류는 무한 재시도하지 않고 제한 횟수 후 terminal 처리
+- 같은 스트리머는 여러 API 사용자가 구독해도 SOOP Native WebSocket을 connection pool에서 공유
+- optional `reindeer/soop` realtime mirror와 Native 이벤트를 1:1 occurrence 방식으로 cross-provider dedup
+- 같은 provider의 정상 반복 채팅은 보존하며, stable provider event ID 재전송은 중복 제거
+
+### Protocol Drift / Flight Recorder
+
+- unknown opcode, parse error, length mismatch, JOIN timeout, liveness timeout을 anomaly로 기록
+- 여러 스트림에서 unknown/malformed 비율이 급증하면 Protocol Drift Incident 생성
+- incident 발생 시 관련 스트림의 최근 RAW packet과 anomaly를 **flight recording bundle**로 보존
+- RAW/unknown/anomaly/drift 메모리는 모두 상한을 두어 장기 실행 시 무한 증가 방지
+- `soopapi`의 RAW fixture 검증 철학을 벤치마킹하여 길이-prefix fixture replay 유틸리티/테스트 추가
+
+### API / 보안
+
+- REST API + WebSocket API + TypeScript SDK
+- API key 비교는 constant-time 방식
+- IP rate limiter는 unique-client map을 bounded/pruned 상태로 유지
+- 요청 body size 제한 및 오류별 HTTP status 매핑
+- WebSocket client 수 / subscription 수 / payload / idle / backpressure 제한
+- downstream WebSocket heartbeat 및 비응답 client 종료
+- write API는 기본 OFF이며 API key가 함께 설정되어야 활성화
+- SOOP 로그인 비밀번호는 저장하지 않음
+- write session의 **원본 bearer token은 로그인 응답에서 한 번만 반환**, 서버에는 SHA-256 hash만 저장
+- `/v1/auth/sessions`에는 사용할 수 없는 짧은 `sessionRef`만 노출
+
+### Java sidecar
+
+- `soopapi` + `soop4j` 관측을 Virtual Thread에서 병렬 실행
+- provider별 실패를 독립 observation으로 반환
+- Node가 가진 timeout budget보다 Java 내부 작업이 먼저 끝나도록 budget 전달/상한 적용
+- sidecar가 느리거나 죽어도 Node Native Core의 부팅/서비스와 분리
+
+### 운영
+
+- Prometheus counter/gauge/histogram + provider/consensus/reconnect/drift 지표
+- 최대 500 ID bulk 조회 + upstream concurrency 제한
+- graceful shutdown
+- Docker Compose / Windows `start.bat` / `stop.bat`
+- GitHub Actions: repository integrity, Node 22/24 build+test, Java 25 sidecar compile, Docker build
+- 수동 실제 SOOP smoke workflow
+- 수동 real-network soak workflow
+
+## 빠른 실행
+
+### Docker 권장
+
+```bat
+copy .env.example .env
+start.bat
+```
+
+- REST: `http://localhost:8080`
+- WS: `ws://localhost:8080/v1/ws`
+
+### Node 단독
+
+```bash
+cp .env.example .env
+npm install
+npm run build
+npm start
+```
+
+Java 검증 provider가 필요 없으면:
+
+```env
+SOOP_ENABLE_JAVA_SIDECAR=false
+```
+
+## 주요 API
+
+```text
+GET /v1/health
+GET /v1/live/{streamerId}
+GET /v1/channel/{streamerId}
+GET /v1/viewers/{streamerId}
+GET /v1/state/{streamerId}
+GET /v1/live?ids=id1,id2,id3
+GET /v1/providers
+GET /v1/catalog/events
+GET /v1/raw/unknown
+GET /v1/diagnostics
+GET /v1/diagnostics/drift
+GET /v1/diagnostics/anomalies
+```
+
+WebSocket subscribe:
+
+```json
+{"action":"subscribe","streamers":["streamerA","streamerB"],"events":["CHAT_MESSAGE","donation","MISSION"]}
+```
+
+## 캐시 / 디버그
+
+```text
+?debug=1    provider raw 포함
+?refresh=1  TTL cache 우회
+```
+
+## 이벤트 신뢰 경계
+
+이벤트 catalogue는 `stable`, `conditional`, `raw-only`로 분류합니다. opcode가 존재한다는 이유만으로 일반 사용자가 관리자 데이터를 조회할 수 있다고 가정하지 않습니다.
+
+특히 code `52`는 블랙리스트 조회 기능으로 노출하지 않으며 `UNCLASSIFIED_MODERATION_52` / `raw-only` 신호로만 보존합니다.
+
+## 검증 상태
+
+이 배포본은 제작 환경에서 다음을 통과했습니다.
+
+- repository integrity check
+- TypeScript strict/full compile (`tsc --noEmit`)
+- clean TypeScript build
+- compiled JavaScript 회귀 테스트 **37 passed / 0 failed**
+- Java sidecar API-shape compile 검증
+- TLS insecure-default / raw session-token exposure / 비밀정보 로그 패턴 source scan
+- ZIP 생성 후 archive integrity 및 금지 파일(`node_modules`, `.env`) 검사
+
+단, 제작 컨테이너에는 외부 DNS, Docker daemon, Java 25/Gradle 의존성 환경이 없어 **실제 SOOP 네트워크 smoke, clean registry install, 실제 JDK25 sidecar dependency build, Docker build는 로컬에서 수행할 수 없습니다.** 이를 과장해 “실서비스 완전 검증”이라고 표기하지 않습니다. GitHub CI + smoke + soak workflow를 production gate로 포함했습니다.
+
+자세한 내용은 `VALIDATION.md`와 `VALIDATION_REPORT.txt`를 확인하세요.
+
+## 문서
+
+- `docs/API.md` — REST / WS / write API
+- `docs/ARCHITECTURE.md` — 장애 격리와 데이터 경로
+- `docs/BENCHMARK_SOOPAPI.md` — soopapi/reindeer 벤치마킹 반영점
+- `VALIDATION.md` — 검증 범위와 한계
+- `SECURITY.md` — 인증·권한·RAW 데이터 경계
+- `THIRD_PARTY_NOTICES.md` — 참조 provider / 라이선스
+
+## 주의
+
+비공식 API이며 SOOP와 제휴·승인된 프로젝트가 아닙니다. 플랫폼 프로토콜·정책 변경에 따라 동작이 달라질 수 있습니다. 공개 데이터와 정상 인증 흐름을 전제로 하며 접근 제한을 우회하도록 설계하지 않았습니다.
