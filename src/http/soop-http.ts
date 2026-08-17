@@ -3,6 +3,18 @@ import type { ChannelSnapshot, LiveSnapshot } from '../types.js';
 
 export interface SoopCookie { [key: string]: string | number | undefined }
 
+export function soopFlag(value: unknown): boolean {
+  if (value === true) return true;
+  if (value === false || value == null) return false;
+  if (typeof value === 'number') return value !== 0;
+  const s = String(value).trim().toLowerCase();
+  if (!s || ['0','n','no','false','off','null','undefined'].includes(s)) return false;
+  if (['1','y','yes','true','on'].includes(s)) return true;
+  // Unknown non-empty markers stay conservative. We do not bypass a value
+  // that could represent a protected broadcast.
+  return true;
+}
+
 export class SoopHttpClient {
   constructor(private timeoutMs = 4500) {}
 
@@ -57,7 +69,7 @@ export class SoopHttpClient {
       streamerId:id,online,bno:x.BNO?String(x.BNO):undefined,chatNo:x.CHATNO?String(x.CHATNO):undefined,
       streamerNickname:x.BJNICK,title:x.TITLE,category:x.CATE,
       viewerCount:Number.isFinite(Number(x.CTUSER))?Number(x.CTUSER):undefined,
-      startedSecondsAgo:Number.isFinite(Number(x.BTIME))?Number(x.BTIME):undefined,passwordProtected:Boolean(x.BPWD),
+      startedSecondsAgo:Number.isFinite(Number(x.BTIME))?Number(x.BTIME):undefined,passwordProtected:soopFlag(x.BPWD),
       resolution:x.RESOLUTION,bitrate:Number.isFinite(Number(x.BPS))?Number(x.BPS):undefined,
       channelDomain:x.CHDOMAIN,channelPort:Number.isFinite(Number(x.CHPT))?Number(x.CHPT):undefined,ftk:x.FTK,
       geoCountryCode:x.geo_cc,geoRegionCode:x.geo_rc,acceptLanguage:x.acpt_lang,serviceLanguage:x.svc_lang,
@@ -72,6 +84,6 @@ export class SoopHttpClient {
     return{streamerId:id,nickname:s.user_nick,stationName:s.station_name,stationTitle:s.station_title,profileImage:json?.profile_image,
       favorites:Number.isFinite(Number(u.fan_cnt))?Number(u.fan_cnt):undefined,subscribers:Number.isFinite(Number(json?.subscription?.total))?Number(json.subscription.total):undefined,
       totalViewCount:Number.isFinite(Number(u.total_view_cnt))?Number(u.total_view_cnt):undefined,currentViewerCount:Number.isFinite(Number(b.current_sum_viewer))?Number(b.current_sum_viewer):undefined,
-      broadNo:Number.isFinite(Number(b.broad_no))?Number(b.broad_no):undefined,broadTitle:b.broad_title,isPassword:Boolean(b.is_password),raw:json};
+      broadNo:Number.isFinite(Number(b.broad_no))?Number(b.broad_no):undefined,broadTitle:b.broad_title,isPassword:soopFlag(b.is_password),raw:json};
   }
 }
