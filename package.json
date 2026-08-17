@@ -1,6 +1,6 @@
 {
   "name": "soop-unified-core",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "private": true,
   "description": "Hardened fault-tolerant unified unofficial SOOP API core with adaptive consensus, occurrence-safe realtime deduplication, protocol drift flight recording, secure transport, and multi-provider validation/fallback.",
   "type": "module",
