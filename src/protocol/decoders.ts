@@ -26,6 +26,7 @@ export function decodePacket(streamerId:string,p:ParsedPacket,source:'native'|'r
   case 58:e.message=a[0];e.payload={message:a[0]};break;
   case 70:case 71:e.user={id:a[2],nickname:a[3]};e.target={id:a[1]};e.payload={goodsType:n(a[0]),goodsName:a[4],goodsCount:n(a[5]),relay:n(a[6])};break;
   case 76:e.user={id:a[1],nickname:a[2]};e.moderation={action:'kick_and_cancel'};e.payload={status:n(a[0])};break;
+  case 77:{const kickedUsers=[];for(let i=0;i+5<a.length;i+=6)if(a[i])kickedUsers.push({userId:a[i],userNickname:a[i+1],time:a[i+2],orderUserId:a[i+3],orderUserNickname:a[i+4],orderUserFlag:a[i+5]});e.payload={kickedUsers,parts:a};break;}
   case 79:e.user={id:a[1]};e.moderation={action:'spam_info'};e.payload={dobaeInfo:n(a[0])};break;
   case 86:e.user={id:a[1],nickname:a[2]};e.target={id:a[0]};e.donation={kind:'vod_balloon',amount:n(a[3])};break;
   case 87:e.user={id:a[2],nickname:a[3]};e.target={id:a[1]};e.message=a[4];e.donation={kind:'adcon',amount:n(a[9]),fanOrder:n(a[10]),extra:{message2:a[5],title:a[6],urlImg:a[7],urlDefault:a[8],isTopFan:n(a[11]),isFanChief:n(a[12]),isSubRoom:n(a[13])}};break;
