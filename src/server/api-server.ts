@@ -6,10 +6,12 @@ import{EVENT_CATALOG}from'../protocol/catalog.js';
 import{FixedWindowRateLimiter}from'./rate-limit.js';
 import{WsHub,validId}from'./ws-hub.js';
 import{secureTokenEqual}from'./auth.js';
-import{httpStatusForError}from'./errors.js';
+import{classifyApiError}from'./errors.js';
 
+const CORE_VERSION='2.4.0';
 const json=(res:ServerResponse,status:number,data:any)=>{const body=JSON.stringify(data);res.writeHead(status,{'content-type':'application/json; charset=utf-8','content-length':Buffer.byteLength(body)});res.end(body)};
 const clean=(value:any,debug=false)=>debug?value:JSON.parse(JSON.stringify(value,(key,v)=>key==='raw'?undefined:v));
+const errorPayload=(e:unknown)=>{const msg=e instanceof Error?e.message:String(e),info=classifyApiError(msg);return{status:info.status,body:{ok:false,error:msg,code:info.code,retryable:info.retryable}}};
 
 async function readJson(req:IncomingMessage,maxBytes:number){
   let size=0;const chunks:Buffer[]=[];
@@ -31,12 +33,12 @@ export class ApiServer{
 
   private async handle(req:IncomingMessage,res:ServerResponse){
     const u=new URL(req.url??'/',`http://${req.headers.host??'localhost'}`);
-    if(!this.authorized(req))return json(res,401,{ok:false,error:'unauthorized'});
+    if(!this.authorized(req))return json(res,401,{ok:false,error:'unauthorized',code:'UNAUTHORIZED',retryable:false});
     const lim=this.limiter.allow(req.socket.remoteAddress??'unknown');res.setHeader('x-ratelimit-remaining',String(lim.remaining));
-    if(!lim.ok)return json(res,429,{ok:false,error:'rate_limited',resetMs:lim.resetMs});
+    if(!lim.ok)return json(res,429,{ok:false,error:'rate_limited',code:'RATE_LIMITED',retryable:true,resetMs:lim.resetMs});
     const debug=u.searchParams.get('debug')==='1',refresh=u.searchParams.get('refresh')==='1';
     try{
-      if(req.method==='GET'&&u.pathname==='/v1/health')return json(res,200,{ok:true,service:'soop-unified-core',version:'2.3.0',providers:this.service.providers.health(),connections:this.service.pool.list().length,writeApi:this.writeAllowed(),time:new Date().toISOString()});
+      if(req.method==='GET'&&u.pathname==='/v1/health')return json(res,200,{ok:true,service:'soop-unified-core',version:CORE_VERSION,apiContract:2,providers:this.service.providers.health(),connections:this.service.pool.list().length,writeApi:this.writeAllowed(),time:new Date().toISOString()});
       if(req.method==='GET'&&u.pathname==='/v1/providers')return json(res,200,{ok:true,providers:this.service.providers.health(),reliability:this.service.providers.reliabilitySnapshot()});
       if(req.method==='GET'&&u.pathname==='/v1/diagnostics')return json(res,200,{ok:true,...this.service.diagnostics()});
       if(req.method==='GET'&&u.pathname==='/v1/diagnostics/drift')return json(res,200,{ok:true,drift:this.service.pool.drift.snapshot(),incidents:this.service.raw.incidents(100),flightRecordings:this.service.raw.flightRecordings(20)});
@@ -48,19 +50,17 @@ export class ApiServer{
       if(req.method==='GET'&&u.pathname==='/v1/raw/unknown')return json(res,200,{ok:true,unknown:this.service.raw.unknownSummary()});
       const raw=u.pathname.match(/^\/v1\/raw\/([A-Za-z0-9_-]+)$/);if(req.method==='GET'&&raw)return json(res,200,{ok:true,streamerId:raw[1],packets:this.service.raw.recent(raw[1],Math.min(1000,Number(u.searchParams.get('limit')||100)))});
 
-      // Batch: /v1/live?ids=a,b,c (same for channel/viewers/state)
       const batch=u.pathname.match(/^\/v1\/(live|channel|viewers|state)$/);
-      if(req.method==='GET'&&batch){const ids=(u.searchParams.get('ids')??'').split(',').map(x=>x.trim()).filter(validId).slice(0,500);if(!ids.length)return json(res,400,{ok:false,error:'ids_required'});const data=await this.service.batch(batch[1] as any,ids,refresh);return json(res,200,{ok:true,data:clean(data,debug)})}
+      if(req.method==='GET'&&batch){const ids=(u.searchParams.get('ids')??'').split(',').map(x=>x.trim()).filter(validId).slice(0,500);if(!ids.length)return json(res,400,{ok:false,error:'ids_required',code:'INVALID_REQUEST',retryable:false});const data=await this.service.batch(batch[1] as any,ids,refresh);return json(res,200,{ok:true,data:clean(data,debug)})}
 
       const m=u.pathname.match(/^\/v1\/(live|channel|viewers|state)\/([A-Za-z0-9_-]+)$/);
-      if(req.method==='GET'&&m){const kind=m[1],id=m[2];if(!validId(id))return json(res,400,{ok:false,error:'invalid_streamer_id'});const data=kind==='live'?await this.service.live(id,refresh):kind==='channel'?await this.service.channel(id,refresh):kind==='viewers'?await this.service.viewers(id,refresh):await this.service.state(id,refresh);return json(res,200,{ok:true,data:clean(data,debug)})}
+      if(req.method==='GET'&&m){const kind=m[1],id=m[2];if(!validId(id))return json(res,400,{ok:false,error:'invalid_streamer_id',code:'INVALID_REQUEST',retryable:false});const data=kind==='live'?await this.service.live(id,refresh):kind==='channel'?await this.service.channel(id,refresh):kind==='viewers'?await this.service.viewers(id,refresh):await this.service.state(id,refresh);return json(res,200,{ok:true,data:clean(data,debug)})}
 
       const s=u.pathname.match(/^\/v1\/streams\/([A-Za-z0-9_-]+)$/);
       if(s&&validId(s[1])){if(req.method==='POST'){await this.service.pool.pin(s[1]);return json(res,202,{ok:true,streamerId:s[1],status:'connecting'})}if(req.method==='DELETE'){await this.service.pool.unpin(s[1]);return json(res,200,{ok:true,streamerId:s[1],status:'released'})}}
 
-      // Authenticated write API. Disabled unless BOTH SOOP_ENABLE_WRITE_API=true and SOOP_API_KEY is set.
       if(u.pathname.startsWith('/v1/auth')||u.pathname.startsWith('/v1/chat')){
-        if(!this.writeAllowed())return json(res,403,{ok:false,error:'write_api_disabled_or_api_key_missing'});
+        if(!this.writeAllowed())return json(res,403,{ok:false,error:'write_api_disabled_or_api_key_missing',code:'FORBIDDEN',retryable:false});
         if(req.method==='POST'&&u.pathname==='/v1/auth/login'){const body=await readJson(req,this.cfg.maxBodyBytes);const data=await this.service.auth.login(String(body.userId??''),String(body.password??''));return json(res,200,{ok:true,data})}
         if(req.method==='POST'&&u.pathname==='/v1/auth/logout'){const body=await readJson(req,this.cfg.maxBodyBytes);return json(res,200,{ok:true,loggedOut:await this.service.auth.logout(String(body.sessionId??''))})}
         if(req.method==='GET'&&u.pathname==='/v1/auth/sessions')return json(res,200,{ok:true,sessions:this.service.auth.list()});
@@ -68,8 +68,8 @@ export class ApiServer{
         if(req.method==='POST'&&send){const id=send[1],body=await readJson(req,this.cfg.maxBodyBytes),sessionId=String(body.sessionId??''),message=String(body.message??'');if(send[2]==='send')await this.service.auth.sendChat(sessionId,id,message);else await this.service.auth.sendWhisper(sessionId,id,String(body.targetId??''),message);return json(res,202,{ok:true,streamerId:id,type:send[2]})}
       }
 
-      return json(res,404,{ok:false,error:'not_found'});
-    }catch(e){this.service.metrics.inc('soop_http_errors_total');const msg=e instanceof Error?e.message:String(e);const status=httpStatusForError(msg);return json(res,status,{ok:false,error:msg})}
+      return json(res,404,{ok:false,error:'not_found',code:'NOT_FOUND',retryable:false});
+    }catch(e){this.service.metrics.inc('soop_http_errors_total');const x=errorPayload(e);return json(res,x.status,x.body)}
   }
   async close(){await this.ws.close();await new Promise<void>(r=>this.server.close(()=>r()))}
 }
