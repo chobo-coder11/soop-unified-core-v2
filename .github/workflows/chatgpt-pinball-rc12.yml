@@ -7,6 +7,12 @@ on:
     paths:
       - '.chatgpt-build/pinball-rc12/**'
       - '.github/workflows/chatgpt-pinball-rc12.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.chatgpt-build/pinball-rc12/**'
+      - '.github/workflows/chatgpt-pinball-rc12.yml'
   workflow_dispatch:
 
 permissions:
