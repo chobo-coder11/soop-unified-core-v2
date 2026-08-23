@@ -40,10 +40,16 @@ jobs:
           New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\pinball" | Out-Null
           Expand-Archive "$env:RUNNER_TEMP\pinball-rc12-source.zip" "$env:RUNNER_TEMP\pinball" -Force
 
-          # Replace the damaged rc12 UI script with the verified clean copy.
+          # Replace the damaged rc12 UI script, then repair the one known mangled line before syntax validation.
           Copy-Item '.chatgpt-build/pinball-rc12/appfix.js' "$env:RUNNER_TEMP\pinball\ui\app.js" -Force
           $uiHash = (Get-FileHash "$env:RUNNER_TEMP\pinball\ui\app.js" -Algorithm SHA256).Hash.ToLower()
           if ($uiHash -ne '71154adeb60bbf9febfafa31404893fad858aae6ffb864013f23562b5a8f8a76') { throw "UI asset checksum mismatch: $uiHash" }
+          $appPath = "$env:RUNNER_TEMP\pinball\ui\app.js"
+          $appLines = [System.Collections.Generic.List[string]](Get-Content $appPath)
+          if ($appLines.Count -lt 46) { throw 'UI script is unexpectedly short' }
+          $fixedLine = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('ICBpZihzaG93JiZzdGFydCYmZW5kKXskKCcjYWN0aXZlU2NoZWR1bGVQaGFzZScpLnRleHRDb250ZW50PXNjaGVkdWxlUGhhc2VUZXh0KHBoYXNlKTskKCcjYWN0aXZlU2NoZWR1bGVSYW5nZScpLnRleHRDb250ZW50PXNjaGVkdWxlUmFuZ2UoKTtsZXQgbGVmdD0wLHBjdD0wO2lmKHBoYXNlPT09J3dhaXRpbmcnKXtsZWZ0PXN0YXJ0LW5vdzsgcGN0PTB9ZWxzZSBpZihwaGFzZT09PSdjb2xsZWN0aW5nJyl7bGVmdD1lbmQtbm93O2NvbnN0IHRvdGFsPWVuZC1zdGFydCxwYXN0PW5vdy1zdGFydDtwY3Q9TWF0aC5tYXgoMCxNYXRoLm1pbigxMDAscGFzdC90b3RhbCoxMDApKX1lbHNlIGlmKHBoYXNlPT09J2dyYWNlJyl7bGVmdD0wO3BjdD0xMDB9ZWxzZXtwY3Q9MTAwfSQoJyNzY2hlZHVsZUNvdW50ZG93bicpLnRleHRDb250ZW50PXBoYXNlPT09J2dyYWNlJz9g7KCE7J6Q64WAICR7Uy5zY2hlZHVsZVBlbmRpbmdUdHN8fDB96rG0YDpwaGFzZT09PSdmaW5pc2hlZCc/J+yiheujjCc6ZHVyKGxlZnQpOyQoJyNzY2hlZHVsZVByb2dyZXNzQmFyJykuc3R5bGUud2lkdGg9cGN0KyclJzskKCcjc2NoZWR1bGVHcmFjZVRleHQnKS5jbGFzc0xpc3QudG9nZ2xlKCdoaWRkZW4nLHBoYXNlIT09J2dyYWNlJyk7fQo='))
+          $appLines[45] = $fixedLine.TrimEnd("`r","`n")
+          Set-Content $appPath $appLines -Encoding utf8
 
           # rc14: give PINBALL QUEUE substantially more room without adding controls.
           $stylePath = "$env:RUNNER_TEMP\pinball\ui\style.css"
