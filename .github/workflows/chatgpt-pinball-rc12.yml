@@ -1,4 +1,4 @@
-name: ChatGPT Pinball RC13 Build
+name: ChatGPT Pinball RC14 Build
 
 on:
   push:
@@ -31,7 +31,7 @@ jobs:
         with:
           go-version: '1.23.x'
 
-      - name: Reconstruct source
+      - name: Reconstruct and patch source
         shell: pwsh
         run: |
           $parts = Get-ChildItem '.chatgpt-build/pinball-rc12/part*.txt' | Sort-Object Name
@@ -39,11 +39,35 @@ jobs:
           [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\pinball-rc12-source.zip", [Convert]::FromBase64String($b64))
           New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\pinball" | Out-Null
           Expand-Archive "$env:RUNNER_TEMP\pinball-rc12-source.zip" "$env:RUNNER_TEMP\pinball" -Force
+
+          # Replace the damaged rc12 UI script with the verified clean copy.
           Copy-Item '.chatgpt-build/pinball-rc12/appfix.js' "$env:RUNNER_TEMP\pinball\ui\app.js" -Force
           $uiHash = (Get-FileHash "$env:RUNNER_TEMP\pinball\ui\app.js" -Algorithm SHA256).Hash.ToLower()
-          if ($uiHash -ne '4f01fd784a51a63af767ad6407d6fed05fbb40b791a07f9a3b7913b68ce32964') { throw "UI asset checksum mismatch: $uiHash" }
-          (Get-Content "$env:RUNNER_TEMP\pinball\main.go" -Raw).Replace('1.0.0-rc12','1.0.0-rc13') | Set-Content "$env:RUNNER_TEMP\pinball\main.go" -NoNewline -Encoding utf8
-          (Get-Content "$env:RUNNER_TEMP\pinball\README.txt" -Raw).Replace('v1.0.0-rc12','v1.0.0-rc13') | Set-Content "$env:RUNNER_TEMP\pinball\README.txt" -NoNewline -Encoding utf8
+          if ($uiHash -ne '71154adeb60bbf9febfafa31404893fad858aae6ffb864013f23562b5a8f8a76') { throw "UI asset checksum mismatch: $uiHash" }
+
+          # rc14: give PINBALL QUEUE substantially more room without adding controls.
+          $stylePath = "$env:RUNNER_TEMP\pinball\ui\style.css"
+          $css = Get-Content $stylePath -Raw
+          $css = $css.Replace('.workspace{min-height:0;display:grid;grid-template-columns:292px minmax(600px,1fr) 420px;gap:12px;padding:12px}', '.workspace{min-height:0;display:grid;grid-template-columns:280px minmax(520px,1fr) minmax(520px,34vw);gap:12px;padding:12px}')
+          $css = $css.Replace('body.compact .leftRail{display:none}body.compact .workspace{grid-template-columns:minmax(560px,1fr) 440px}', 'body.compact .leftRail{display:none}body.compact .workspace{grid-template-columns:minmax(520px,1fr) minmax(540px,38vw)}')
+          $css = $css.Replace('@media(max-width:1500px){.topbar{grid-template-columns:268px minmax(280px,1fr) auto auto}.workspace{grid-template-columns:268px minmax(520px,1fr) 380px}', '@media(max-width:1500px){.topbar{grid-template-columns:260px minmax(280px,1fr) auto auto}.workspace{grid-template-columns:260px minmax(470px,1fr) 500px}')
+          $css = $css.Replace('@media(max-width:1250px){body{min-width:1024px}.workspace{grid-template-columns:245px minmax(440px,1fr) 340px;gap:8px;padding:8px}.topbar{grid-template-columns:245px minmax(240px,1fr) auto}', '@media(max-width:1250px){body{min-width:1040px}.workspace{grid-template-columns:230px minmax(390px,1fr) 390px;gap:8px;padding:8px}.topbar{grid-template-columns:230px minmax(240px,1fr) auto}')
+          $css = $css.Replace('.queueHeader{display:flex;justify-content:space-between;align-items:center;padding:15px 14px 12px}', '.queueHeader{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:16px 16px 13px}')
+          $css = $css.Replace('.queueList{min-height:0;overflow:auto;padding:8px}', '.queueList{min-height:0;overflow:auto;padding:10px 11px}')
+          $css = $css.Replace('.queueItem{border:1px solid #1f2730;border-radius:11px;background:#10161c;padding:11px;margin-bottom:7px;transition:.15s}', '.queueItem{border:1px solid #1f2730;border-radius:12px;background:#10161c;padding:12px 13px;margin-bottom:8px;transition:.15s}')
+          $css = $css.Replace('.queueOutput{font-size:12px;font-weight:800;', '.queueOutput{font-size:13px;font-weight:800;')
+          $css = $css.Replace('.copyDock{padding:11px 12px 12px;', '.copyDock{padding:12px 14px 14px;')
+          Set-Content $stylePath $css -NoNewline -Encoding utf8
+          if ($css -notmatch 'grid-template-columns:280px minmax\(520px,1fr\) minmax\(520px,34vw\)') { throw 'Queue width patch did not apply' }
+
+          $mainPath = "$env:RUNNER_TEMP\pinball\main.go"
+          (Get-Content $mainPath -Raw).Replace('1.0.0-rc12','1.0.0-rc14') | Set-Content $mainPath -NoNewline -Encoding utf8
+          $indexPath = "$env:RUNNER_TEMP\pinball\ui\index.html"
+          (Get-Content $indexPath -Raw).Replace('1.0.0-rc12','1.0.0-rc14') | Set-Content $indexPath -NoNewline -Encoding utf8
+          $readmePath = "$env:RUNNER_TEMP\pinball\README.txt"
+          $readme = (Get-Content $readmePath -Raw).Replace('v1.0.0-rc12','v1.0.0-rc14')
+          $readme = "RC14 — Wider PINBALL QUEUE`r`n- Queue 기본 폭 확대: 큰 화면 약 34vw / 1500px급 500px / 작은 화면 390px`r`n- Queue 카드와 복사 영역 가독성 개선`r`n`r`n" + $readme
+          Set-Content $readmePath $readme -NoNewline -Encoding utf8
 
       - name: Validate UI syntax
         shell: pwsh
@@ -51,6 +75,7 @@ jobs:
         run: |
           node --check ui/app.js
           if (Select-String -Path ui/app.js -Pattern '�' -Quiet) { throw 'Corrupted replacement characters found in ui/app.js' }
+          if (-not (Select-String -Path ui/style.css -SimpleMatch 'minmax(520px,34vw)' -Quiet)) { throw 'Wider queue CSS missing' }
 
       - name: Pin dependency
         shell: pwsh
@@ -94,7 +119,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: soop-pinball-collector-rc13
+          name: soop-pinball-collector-rc14
           path: ${{ runner.temp }}\deliverables\*
           if-no-files-found: error
           retention-days: 1
