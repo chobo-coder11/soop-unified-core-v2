@@ -1,4 +1,4 @@
-name: ChatGPT Pinball RC12 Build
+name: ChatGPT Pinball RC13 Build
 
 on:
   push:
@@ -39,6 +39,18 @@ jobs:
           [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\pinball-rc12-source.zip", [Convert]::FromBase64String($b64))
           New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\pinball" | Out-Null
           Expand-Archive "$env:RUNNER_TEMP\pinball-rc12-source.zip" "$env:RUNNER_TEMP\pinball" -Force
+          Copy-Item '.chatgpt-build/pinball-rc12/appfix.js' "$env:RUNNER_TEMP\pinball\ui\app.js" -Force
+          $uiHash = (Get-FileHash "$env:RUNNER_TEMP\pinball\ui\app.js" -Algorithm SHA256).Hash.ToLower()
+          if ($uiHash -ne '4f01fd784a51a63af767ad6407d6fed05fbb40b791a07f9a3b7913b68ce32964') { throw "UI asset checksum mismatch: $uiHash" }
+          (Get-Content "$env:RUNNER_TEMP\pinball\main.go" -Raw).Replace('1.0.0-rc12','1.0.0-rc13') | Set-Content "$env:RUNNER_TEMP\pinball\main.go" -NoNewline -Encoding utf8
+          (Get-Content "$env:RUNNER_TEMP\pinball\README.txt" -Raw).Replace('v1.0.0-rc12','v1.0.0-rc13') | Set-Content "$env:RUNNER_TEMP\pinball\README.txt" -NoNewline -Encoding utf8
+
+      - name: Validate UI syntax
+        shell: pwsh
+        working-directory: ${{ runner.temp }}\pinball
+        run: |
+          node --check ui/app.js
+          if (Select-String -Path ui/app.js -Pattern '�' -Quiet) { throw 'Corrupted replacement characters found in ui/app.js' }
 
       - name: Pin dependency
         shell: pwsh
@@ -82,7 +94,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: soop-pinball-collector-rc12
+          name: soop-pinball-collector-rc13
           path: ${{ runner.temp }}\deliverables\*
           if-no-files-found: error
           retention-days: 1
