@@ -1,0 +1,4 @@
+import test from'node:test';import assert from'node:assert/strict';import{assessBroadcastIdentity}from'../src/core/broadcast-identity.js';
+const r=(data:any,confidence=.9)=>({data,confidence,source:'native',corroboratedBy:[],observations:[],observedAt:new Date().toISOString(),consensus:{status:'confirmed',agreement:1,totalWeight:1,winningWeight:1,sourceCount:1,implementationGroups:1,upstreamFamilies:1}} as any);
+test('matching BNO/broadNo establishes broadcast identity',()=>{const x=assessBroadcastIdentity(r({streamerId:'x',online:true,bno:'123'}),r({streamerId:'x',broadNo:123}));assert.equal(x.status,'matched');assert.ok(x.confidence>=.7)});
+test('mismatching BNO/broadNo is never silently merged',()=>{const x=assessBroadcastIdentity(r({streamerId:'x',online:true,bno:'123'}),r({streamerId:'x',broadNo:124}));assert.equal(x.status,'mismatch');assert.ok(x.confidence<.2)});

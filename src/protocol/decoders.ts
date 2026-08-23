@@ -2,6 +2,7 @@ import{randomUUID}from'node:crypto';import{eventDescriptor}from'./catalog.js';im
 const n=(v:string|undefined,f=0)=>{const x=Number(v);return Number.isFinite(x)?x:f};
 const j=(v:string|undefined):unknown=>{if(!v)return{};try{return JSON.parse(v)}catch{return{text:v}}};
 const o=(e:[string,unknown][])=>Object.fromEntries(e.filter(([,v])=>v!==undefined&&v!==''));
+const userIdLike=(v:string|undefined)=>Boolean(v&&/^[A-Za-z0-9_-]{1,64}$/.test(v));
 export function decodePacket(streamerId:string,p:ParsedPacket,source:'native'|'reindeer'='native'):CanonicalEvent{
  const d=eventDescriptor(p.code),a=p.parts;const e:CanonicalEvent={id:randomUUID(),streamerId,code:p.code,type:d.name,description:d.description,category:d.category,supportLevel:d.supportLevel,source,receivedAt:new Date().toISOString(),payload:{parts:a},raw:p.raw};
  switch(p.code){
@@ -46,7 +47,7 @@ export function decodePacket(streamerId:string,p:ParsedPacket,source:'native'|'r
   case 121:e.payload={data:j(a[0]??a.join(''))};break;
   case 122:e.message=a[0];e.payload={caption:a};break;
   case 125:e.payload={data:j(a[0]??a.join(''))};break;
-  case 127:e.payload={subscriberStatus:a};break;
+  case 127:{const candidates=a.filter((v,i)=>i%2===0&&userIdLike(v)),presenceShape=candidates.length>0&&(a.length===1||candidates.length>=2||candidates.length>=Math.ceil(a.length/3));e.payload=presenceShape?{schema:'viewer-presence-candidate',userIds:candidates,parts:a,confidence:a.length>2?.85:.55}:{schema:'unclassified-127',parts:a,confidence:.25};break}
   default:e.payload={parts:a};
  }
  return e;

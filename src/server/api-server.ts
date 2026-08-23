@@ -40,7 +40,7 @@ export class ApiServer{
     if(!lim.ok)return json(res,429,{ok:false,error:'rate_limited',resetMs:lim.resetMs});
     const debug=u.searchParams.get('debug')==='1',refresh=u.searchParams.get('refresh')==='1';
     try{
-      if(req.method==='GET'&&u.pathname==='/v1/health')return json(res,200,{ok:true,service:'soop-unified-core',version:'2.4.0',providers:this.service.providers.health(),connections:this.service.pool.list().length,writeApi:this.writeAllowed(),time:new Date().toISOString()});
+      if(req.method==='GET'&&u.pathname==='/v1/health')return json(res,200,{ok:true,service:'soop-unified-core',version:'2.5.0',providers:this.service.providers.health(),connections:this.service.pool.list().length,writeApi:this.writeAllowed(),time:new Date().toISOString()});
       if(req.method==='GET'&&u.pathname==='/v1/providers')return json(res,200,{ok:true,providers:this.service.providers.health(),reliability:this.service.providers.reliabilitySnapshot()});
       if(req.method==='GET'&&u.pathname==='/v1/diagnostics')return json(res,200,{ok:true,...this.service.diagnostics()});
       if(req.method==='GET'&&u.pathname==='/v1/diagnostics/drift')return json(res,200,{ok:true,drift:this.service.pool.drift.snapshot(),incidents:this.service.raw.incidents(100),flightRecordings:this.service.raw.flightRecordings(20)});

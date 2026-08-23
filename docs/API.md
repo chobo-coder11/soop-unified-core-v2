@@ -1,4 +1,4 @@
-# SOOP Unified Core v2.4.0 API
+# SOOP Unified Core v2.5.0 API
 
 Base URL: `http://localhost:8080`
 
@@ -167,3 +167,35 @@ GET /v1/catalog/events?support=raw-only
 ```
 
 Code `52`는 블랙리스트 조회 API가 아니며 `UNCLASSIFIED_MODERATION_52` / `raw-only`로만 노출합니다.
+
+## v2.5 accuracy metadata
+
+`GET /v1/live/{id}` and `GET /v1/channel/{id}` expose field evidence under `consensus.fields`.
+
+Each field can include `agreement`, `confidence`, `sources`, `conflictingProviders`, `upstreamFamilies`, `temporalSkewMs`, and `importance`.
+
+`confidence` is an evidence score, not a statistical probability.
+
+`GET /v1/state/{id}` additionally returns:
+
+```json
+{
+  "accuracy": {
+    "broadcastIdentity": {
+      "status": "matched",
+      "liveBno": "123456",
+      "channelBroadNo": "123456",
+      "generation": 2,
+      "revalidated": false,
+      "confidence": 0.97
+    },
+    "realtimeBinding": {
+      "status": "matched",
+      "socketBno": "123456",
+      "liveBno": "123456"
+    }
+  }
+}
+```
+
+A persistent `broadcastIdentity.status=mismatch` means live and station endpoints still identify different broadcasts after one cache-bypassing re-read. Callers should not merge those snapshots as if they belong to the same broadcast.

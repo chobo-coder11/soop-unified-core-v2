@@ -41,15 +41,16 @@ export class JavaSidecarProvider {
     }
 
     const started = Date.now();
+    const requestStartedAt = new Date(started).toISOString();
     try {
       const upstreamBudget=Math.max(500,Math.min(10_000,this.timeoutMs-500));
       const json: any = await this.fetchJson(`/v1/${kind}?id=${encodeURIComponent(id)}&timeoutMs=${upstreamBudget}`);
       return names.map(provider => {
         const breaker = this.breakers[provider];
         const item = json?.providers?.[provider];
-        const latencyMs = Number(item?.latencyMs ?? Date.now() - started);
+        const now=Date.now(),latencyMs = Number(item?.latencyMs ?? now - started),responseAt=new Date(now).toISOString();
         if (!runnable.includes(provider)) {
-          return { provider, ok: false, latencyMs, observedAt: observedAt(), error: 'circuit open', provenance: PROVIDER_PROVENANCE[provider] };
+          return { provider, ok: false, latencyMs, observedAt: responseAt, requestStartedAt, responseAt, sampleAgeMs:now-started, error: 'circuit open', provenance: PROVIDER_PROVENANCE[provider] };
         }
         if (item?.ok) breaker.recordSuccess(latencyMs);
         else breaker.recordFailure(item?.error ?? 'sidecar provider failed', latencyMs);
@@ -57,20 +58,26 @@ export class JavaSidecarProvider {
           provider: provider as ProviderName,
           ok: Boolean(item?.ok),
           latencyMs,
-          observedAt: observedAt(),
+          observedAt: responseAt,
+          requestStartedAt,
+          responseAt,
+          sampleAgeMs:now-started,
           value: item?.value as T | undefined,
           error: item?.error as string | undefined,
           provenance: PROVIDER_PROVENANCE[provider],
         };
       });
     } catch (error) {
-      const latencyMs = Date.now() - started;
+      const ended=Date.now(),latencyMs = ended - started,responseAt=new Date(ended).toISOString();
       for (const provider of runnable) this.breakers[provider].recordFailure(error, latencyMs);
       return names.map(provider => ({
         provider: provider as ProviderName,
         ok: false,
         latencyMs,
-        observedAt: observedAt(),
+        observedAt: responseAt,
+        requestStartedAt,
+        responseAt,
+        sampleAgeMs:ended-started,
         error: runnable.includes(provider) ? (error instanceof Error ? error.message : String(error)) : 'circuit open',
         provenance: PROVIDER_PROVENANCE[provider],
       }));

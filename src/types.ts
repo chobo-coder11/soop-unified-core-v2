@@ -30,10 +30,13 @@ export interface ProviderHealth {
   ewmaLatencyMs?:number;
 }
 
+export interface LiveViewPreset {name?:string;label?:string;resolution?:string;bps?:number}
+
 export interface LiveSnapshot {
   streamerId:string;
   online:boolean;
   bno?:string;
+  previousBno?:string;
   chatNo?:string;
   streamerNickname?:string;
   title?:string;
@@ -43,6 +46,9 @@ export interface LiveSnapshot {
   passwordProtected?:boolean;
   resolution?:string;
   bitrate?:number;
+  viewPresets?:LiveViewPreset[];
+  selectedViewBps?:number;
+  lowLatency?:boolean;
   thumbnailUrl?:string;
   channelDomain?:string;
   channelPort?:number;
@@ -76,20 +82,30 @@ export interface ProviderObservation<T> {
   ok:boolean;
   latencyMs:number;
   observedAt:string;
+  requestStartedAt?:string;
+  responseAt?:string;
+  sampleAgeMs?:number;
   value?:T;
   error?:string;
   provenance?:ProviderProvenance;
   stale?:boolean;
+  validationStatus?:'valid'|'warning'|'invalid';
+  validationIssues?:string[];
 }
 
 export type ConsensusStatus='confirmed'|'uncertain'|'single-source';
 export type OnlineState='online'|'offline'|'uncertain';
+export type FieldImportance='critical'|'high'|'medium'|'low';
 export interface FieldConsensusMeta {
   value?:unknown;
   agreement:number;
+  confidence?:number;
   sourceCount:number;
   sources:ProviderName[];
   conflictingProviders?:ProviderName[];
+  upstreamFamilies?:number;
+  temporalSkewMs?:number;
+  importance?:FieldImportance;
 }
 
 export interface FreshnessMeta {
@@ -107,10 +123,13 @@ export interface ConsensusMeta {
   sourceCount:number;
   implementationGroups:number;
   upstreamFamilies:number;
+  temporalSkewMs?:number;
   reason?:string;
   outlierProviders?:ProviderName[];
   fields?:Record<string,FieldConsensusMeta>;
 }
+
+export interface BroadcastGenerationMeta {generation:number;bno:string;previousBno?:string;changed:boolean;firstSeenAt:string;lastSeenAt:string}
 
 export interface UnifiedResult<T> {
   data:T;
@@ -121,6 +140,7 @@ export interface UnifiedResult<T> {
   observedAt:string;
   consensus:ConsensusMeta;
   freshness?:FreshnessMeta;
+  broadcastGeneration?:BroadcastGenerationMeta;
 }
 
 export type EventCategory='connection'|'chat'|'viewer'|'donation'|'moderation'|'item'|'notification'|'system'|'unknown';
@@ -184,4 +204,15 @@ export interface ProtocolIncidentBundle {
   capturedAt:string;
   packets:RawPacketRecord[];
   anomalies:ProtocolAnomaly[];
+}
+
+export interface BroadcastIdentityAssessment {
+  status:'matched'|'mismatch'|'live-only'|'channel-only'|'offline'|'unknown';
+  liveBno?:string;
+  channelBroadNo?:string;
+  generation?:number;
+  generationChanged?:boolean;
+  revalidated?:boolean;
+  confidence:number;
+  reason?:string;
 }

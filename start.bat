@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 if not exist .env copy .env.example .env >nul
-echo [SOOP Unified Core v2.4.0] Starting...
+echo [SOOP Unified Core v2.5.0 Accuracy Ultimate] Starting...
 docker compose up --build -d
 if errorlevel 1 (
   echo Failed to start. Check Docker Desktop.

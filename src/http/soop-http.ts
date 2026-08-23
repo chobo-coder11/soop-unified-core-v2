@@ -1,5 +1,6 @@
 import { DEFAULT_BASE_URLS, DEFAULT_USER_AGENT } from '../protocol/constants.js';
 import type { ChannelSnapshot, LiveSnapshot } from '../types.js';
+import { broadcastId, normalizeViewPresets, nullableBoolean, nullableNumber, nullableString, selectViewBps } from './normalize.js';
 
 export interface SoopCookie { [key: string]: string | number | undefined }
 
@@ -52,16 +53,17 @@ export class SoopHttpClient {
     if (!response.ok) throw new Error(`live HTTP ${response.status}`);
     const json: any = await response.json();
     const x = json?.CHANNEL ?? {};
-    const online = Number(x.RESULT)!==0 && Boolean(x.BNO);
+    const bno=broadcastId(x.BNO),previousBno=broadcastId(x.PBNO),result=nullableNumber(x.RESULT);
+    const bitrate=nullableNumber(x.BPS),viewPresets=normalizeViewPresets(x.VIEWPRESET);
+    const online=(result??0)!==0&&Boolean(bno);
     return {
-      streamerId:id,online,bno:x.BNO?String(x.BNO):undefined,chatNo:x.CHATNO?String(x.CHATNO):undefined,
-      streamerNickname:x.BJNICK,title:x.TITLE,category:x.CATE,
-      viewerCount:Number.isFinite(Number(x.CTUSER))?Number(x.CTUSER):undefined,
-      startedSecondsAgo:Number.isFinite(Number(x.BTIME))?Number(x.BTIME):undefined,passwordProtected:Boolean(x.BPWD),
-      resolution:x.RESOLUTION,bitrate:Number.isFinite(Number(x.BPS))?Number(x.BPS):undefined,
-      channelDomain:x.CHDOMAIN,channelPort:Number.isFinite(Number(x.CHPT))?Number(x.CHPT):undefined,ftk:x.FTK,
-      geoCountryCode:x.geo_cc,geoRegionCode:x.geo_rc,acceptLanguage:x.acpt_lang,serviceLanguage:x.svc_lang,
-      thumbnailUrl:x.BNO?`https://liveimg.sooplive.co.kr/h/${x.BNO}.webp`:undefined,raw:json,
+      streamerId:id,online,bno,previousBno,chatNo:broadcastId(x.CHATNO),
+      streamerNickname:nullableString(x.BJNICK),title:nullableString(x.TITLE),category:nullableString(x.CATE),
+      viewerCount:nullableNumber(x.CTUSER),startedSecondsAgo:nullableNumber(x.BTIME),passwordProtected:nullableBoolean(x.BPWD),
+      resolution:nullableString(x.RESOLUTION),bitrate,viewPresets,selectedViewBps:selectViewBps(viewPresets,bitrate),lowLatency:nullableBoolean(x.LOWLAYTENCYBJ),
+      channelDomain:nullableString(x.CHDOMAIN),channelPort:nullableNumber(x.CHPT),ftk:nullableString(x.FTK),
+      geoCountryCode:nullableString(x.geo_cc),geoRegionCode:nullableString(x.geo_rc),acceptLanguage:nullableString(x.acpt_lang),serviceLanguage:nullableString(x.svc_lang),
+      thumbnailUrl:bno?`https://liveimg.sooplive.co.kr/h/${bno}.webp`:undefined,raw:json,
     };
   }
 
@@ -69,9 +71,10 @@ export class SoopHttpClient {
     const response=await this.request(`${DEFAULT_BASE_URLS.channel}/api/${encodeURIComponent(id)}/station`);
     if(!response.ok)throw new Error(`channel HTTP ${response.status}`);
     const json:any=await response.json(),s=json?.station??{},b=json?.broad??{},u=s?.upd??json?.upd??{};
-    return{streamerId:id,nickname:s.user_nick,stationName:s.station_name,stationTitle:s.station_title,profileImage:json?.profile_image,
-      favorites:Number.isFinite(Number(u.fan_cnt))?Number(u.fan_cnt):undefined,subscribers:Number.isFinite(Number(json?.subscription?.total))?Number(json.subscription.total):undefined,
-      totalViewCount:Number.isFinite(Number(u.total_view_cnt))?Number(u.total_view_cnt):undefined,currentViewerCount:Number.isFinite(Number(b.current_sum_viewer))?Number(b.current_sum_viewer):undefined,
-      broadNo:Number.isFinite(Number(b.broad_no))?Number(b.broad_no):undefined,broadTitle:b.broad_title,isPassword:Boolean(b.is_password),raw:json};
+    const broadNoRaw=nullableNumber(b.broad_no),broadNo=broadNoRaw!==undefined&&Number.isInteger(broadNoRaw)&&broadNoRaw>0?broadNoRaw:undefined;
+    return{streamerId:id,nickname:nullableString(s.user_nick),stationName:nullableString(s.station_name),stationTitle:nullableString(s.station_title),profileImage:nullableString(json?.profile_image),
+      favorites:nullableNumber(u.fan_cnt),subscribers:nullableNumber(json?.subscription?.total),totalViewCount:nullableNumber(u.total_view_cnt),currentViewerCount:nullableNumber(b.current_sum_viewer),
+      broadNo,broadTitle:nullableString(b.broad_title),isPassword:nullableBoolean(b.is_password),raw:json};
   }
+
 }

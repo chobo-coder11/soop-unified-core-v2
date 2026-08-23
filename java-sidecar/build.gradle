@@ -1,5 +1,5 @@
 plugins { id 'java'; id 'application' }
-group='io.soop.unified'; version='2.4.0'
+group='io.soop.unified'; version='2.5.0'
 repositories { mavenCentral(); maven { url='https://jitpack.io' } }
 dependencies {
   implementation 'com.github.getCurrentThread:soopapi:v0.14.0'

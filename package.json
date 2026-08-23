@@ -1,8 +1,8 @@
 {
   "name": "soop-unified-core",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "private": true,
-  "description": "Production-oriented unofficial SOOP unified core with provider deadlines, partial-state recovery, explicit freshness, field consensus, replayable realtime delivery, optimized hot paths, runtime diagnostics and operator Studio.",
+  "description": "Accuracy-first unofficial SOOP unified realtime core with strict wire normalization, broadcast identity generations, upstream-family evidence consensus, temporal skew scoring, adaptive handshake fallback, protocol drift diagnostics and operator Studio.",
   "type": "module",
   "engines": {
     "node": ">=22"

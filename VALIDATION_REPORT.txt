@@ -1,44 +1,40 @@
-SOOP Unified Core v2.4.0 P0 PRODUCTION HARDENED — HANDOFF VALIDATION REPORT
-Validation date: 2026-08-17 (Asia/Seoul)
+SOOP Unified Core v2.5.0 ACCURACY ULTIMATE — HANDOFF VALIDATION REPORT
+Validation date: 2026-08-23 (Asia/Seoul)
 
 LOCAL PASSES
-- repository integrity: PASS
-- clean TypeScript compile: PASS
-- compiled regression tests: 46 passed / 0 failed (2 WS runtime integration tests skipped locally because the offline validation workspace lacks the installed `ws` runtime package)
-- security-source regression: PASS
-- provider deadline regression: PASS
-- stale metadata regression: PASS
-- field-consensus regression: PASS
-- reliability self-confirmation regression: PASS
+- repository integrity script: PASS after v2.5 tree update
+- targeted strict compile of accuracy-only pure modules: PASS
+- compiled regression tests: 66 passed / 0 failed / 2 WS runtime tests skipped because this workspace has no installed ws runtime
+- Studio extracted browser JavaScript: node --check PASS
+- strict SOOP boolean/number/BNO normalization regressions: PASS
+- BNO generation and BNO↔broadNo identity regressions: PASS
+- upstream-family anti-confidence-inflation regressions: PASS
+- temporal evidence/field-consensus regressions: PASS
+- snapshot quarantine regressions: PASS
+- dual JOIN profile payload regressions: PASS
+- opcode 127 ambiguity regressions: PASS
 
-P0 IMPLEMENTED
-- provider hard deadlines + partial success
-- partial /state recovery
-- explicit stale freshness + confidence decay
-- signal-isolated adaptive reliability
-- field-level channel consensus
-- WS v4 gap/replay/resume + subscription serialization
-- close-during-subscribe ref leak guard
-- drift/dedup/raw hot-path optimization
-- connection timeline + possible gap history
-- runtime CPU/memory/event-loop metrics
-- /studio operator UI
-- /livez + /readyz health endpoints
-- REST+WS soak runner
+V2.5 ACCURACY IMPLEMENTED
+- strict wire normalization; no Boolean("0") or Number("") correctness bugs
+- fallback-provider canonicalization before consensus
+- impossible snapshot quarantine before voting
+- upstream-family evidence voting instead of provider-count voting
+- all-important live/channel fields receive independent evidence metadata
+- provider observation timing + temporal skew exposure
+- BNO broadcast generation tracking + cache invalidation
+- BNO ↔ broadNo mismatch revalidation
+- socket BNO ↔ current live BNO binding visibility
+- VIEWPRESET-aware authenticated JOIN
+- legacy-v1-ticket default JOIN + browser-v2-null fallback after JOIN watchdog timeout
+- opcode 127 viewer-presence candidate shape detection + RAW preservation
+- Studio v2.5 accuracy diagnostics
 
-NOT CLAIMED AS LOCALLY VERIFIED
-- real SOOP public-network smoke
-- 24-72h multi-stream real-network soak
-- clean npm registry install in an unrestricted network
-- Docker daemon build in this sandbox
-- actual JDK25/Gradle remote dependency build
+LOCAL ENVIRONMENT LIMITATION
+This workspace cannot perform a clean npm registry install, so full project `tsc` reports only missing external Node/ws type/runtime packages. Targeted v2.5 pure modules compile strictly. The emitted compiled suite runs successfully. The repository CI performs the authoritative clean Node 22/24 install/build/source-test/compiled-test gate before main promotion.
 
-Use GitHub Actions plus real-network smoke/soak as the production gate.
+NOT CLAIMED UNTIL NETWORK GATES RUN
+- 24-72h real SOOP multi-stream soak
+- real public-stream JOIN success rate for both handshake profiles
+- real-world calibration of evidence confidence scores
 
-HOT-PATH MICROBENCH (LOCAL SYNTHETIC, NOT A PRODUCTION THROUGHPUT CLAIM)
-- 50,000 synthetic canonical events through drift + dedup: ~291.6 ms in this workspace (~171k events/s)
-- purpose: regression guard against obvious per-event full-window scanning, not capacity certification
-
-UI/DX CHECK
-- Studio HTML emitted successfully
-- extracted Studio browser JavaScript: node --check PASS
+The confidence fields are operational evidence scores, not statistical probabilities.

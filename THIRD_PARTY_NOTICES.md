@@ -1,6 +1,6 @@
 # Third-party references / optional providers
 
-SOOP Unified Core v2.4.0 is an unofficial project and is not affiliated with SOOP.
+SOOP Unified Core v2.5.0 is an unofficial project and is not affiliated with SOOP.
 
 Reviewed / optional upstream providers:
 

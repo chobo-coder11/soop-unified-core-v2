@@ -1,0 +1,2 @@
+import test from'node:test';import assert from'node:assert/strict';import{BroadcastGenerationTracker}from'../src/core/broadcast-generation.js';
+test('BNO change increments generation exactly once',()=>{const g=new BroadcastGenerationTracker();const a=g.observe('x','100')!,b=g.observe('x','100')!,c=g.observe('x','101')!,d=g.observe('x','101')!;assert.equal(a.generation,1);assert.equal(b.changed,false);assert.equal(c.generation,2);assert.equal(c.previousBno,'100');assert.equal(d.changed,false)});

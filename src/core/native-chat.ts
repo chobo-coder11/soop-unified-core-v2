@@ -2,7 +2,8 @@ import WebSocket from 'ws';
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { buildPacket, parsePacket } from '../protocol/packet.js';
-import { CMD_CHAT, CMD_CONNECT, CMD_DIRECT_CHAT, CMD_ENTER_INFO, CMD_JOIN, CMD_PING, ELEMENT_END, ELEMENT_START, F, SPACE } from '../protocol/constants.js';
+import { buildConnectPayload, buildJoinPayload, type HandshakeProfile } from '../protocol/handshake.js';
+import { CMD_CHAT, CMD_CONNECT, CMD_DIRECT_CHAT, CMD_ENTER_INFO, CMD_JOIN, CMD_PING, F } from '../protocol/constants.js';
 import { decodePacket } from '../protocol/decoders.js';
 import type { CanonicalEvent, LiveSnapshot, ProtocolAnomaly } from '../types.js';
 import { SoopHttpClient, type SoopCookie } from '../http/soop-http.js';
@@ -16,7 +17,7 @@ const DEFAULT_OPTIONS:NativeChatOptions={maxBackoffMs:30000,allowInsecureTls:fal
 
 export class NativeChatConnection extends EventEmitter {
   state:ChatState='idle';
-  private ws?:WebSocket;private heartbeat?:NodeJS.Timeout;private retry?:NodeJS.Timeout;private enterWatchdog?:NodeJS.Timeout;private attempt=0;private stopped=false;private live?:LiveSnapshot;private connecting=false;private lastInboundAt=0;private lastConnectAt?:string;private lastJoinAt?:string;private lastDisconnectAt?:string;private lastError?:string;private lastCloseCode?:number;private lastCloseReason?:string;private nextRetryAt?:string;private lastPacketCode?:number;private packetsIn=0;private timeline:Array<{at:string;type:string;detail?:string;code?:number}>=[];
+  private ws?:WebSocket;private heartbeat?:NodeJS.Timeout;private retry?:NodeJS.Timeout;private enterWatchdog?:NodeJS.Timeout;private attempt=0;private stopped=false;private live?:LiveSnapshot;private connecting=false;private lastInboundAt=0;private handshakeProfile:HandshakeProfile='legacy-v1-ticket';private handshakeSwitches=0;private broadcastGeneration=0;private broadcastBno?:string;private lastConnectAt?:string;private lastJoinAt?:string;private lastDisconnectAt?:string;private lastError?:string;private lastCloseCode?:number;private lastCloseReason?:string;private nextRetryAt?:string;private lastPacketCode?:number;private packetsIn=0;private timeline:Array<{at:string;type:string;detail?:string;code?:number}>=[];
   private enteredWaiters:Array<{resolve:()=>void;reject:(e:Error)=>void;timer:NodeJS.Timeout}>=[];
   private opts:NativeChatOptions;
 
@@ -28,7 +29,7 @@ export class NativeChatConnection extends EventEmitter {
     if(this.stopped||this.connecting)return;this.connecting=true;if(this.retry){clearTimeout(this.retry);this.retry=undefined}
     const reconnecting=this.attempt>0;this.state=reconnecting?'reconnecting':'connecting';this.trace(reconnecting?'reconnecting':'connecting');if(reconnecting)this.emitSynthetic(-4,'RECONNECTING',{attemptNumber:this.attempt});
     try{
-      this.live=await this.http.liveDetail(this.streamerId,this.opts.cookie);
+      const nextLive=await this.http.liveDetail(this.streamerId,this.opts.cookie),previousBno=this.broadcastBno;if(nextLive.bno&&nextLive.bno!==previousBno){this.broadcastGeneration++;this.broadcastBno=nextLive.bno;if(previousBno)this.trace('broadcast-generation-changed',`${previousBno} -> ${nextLive.bno}`)}this.live=nextLive;
       if(!this.live.online)throw new Error('stream offline');
       if(this.live.passwordProtected)throw new Error('password protected stream is not bypassed');
       if(!this.live.channelDomain||!this.live.channelPort)throw new Error('missing chat endpoint');
@@ -45,8 +46,8 @@ export class NativeChatConnection extends EventEmitter {
     finally{this.connecting=false}
   }
 
-  private connectPayload(){const ticket=String(this.opts.cookie?.AuthTicket??'');return ticket?`${F}${ticket}${F.repeat(2)}16${F}`:`${F.repeat(3)}16${F}`}
-  private joinPayload(){if(!this.live)return`${F}${F.repeat(5)}`;const chatNo=this.live.chatNo??'',ticket=String(this.opts.cookie?.AuthTicket??'');if(!ticket)return`${F}${chatNo}${F.repeat(5)}`;const ftk=this.live.ftk??'',params:[string,string][]=[['set_bps',String(this.live.bitrate??'')],['view_bps',String(this.live.bitrate??'')],['quality','normal'],['uuid',String(this.opts.cookie?._au??'')],['geo_cc',this.live.geoCountryCode??''],['geo_rc',this.live.geoRegionCode??''],['acpt_lang',this.live.acceptLanguage??''],['svc_lang',this.live.serviceLanguage??''],['subscribe','0'],['lowlatency','0'],['mode','landing']];const query=params.map(([k,v])=>`${SPACE}&${SPACE}${k}${SPACE}=${SPACE}${v}`).join(''),meta=`log${ELEMENT_START}${query}${ELEMENT_END}`+`pwd${ELEMENT_START}${ELEMENT_END}`+`auth_info${ELEMENT_START}${ticket}${ELEMENT_END}`+`pver${ELEMENT_START}1${ELEMENT_END}`+`access_system${ELEMENT_START}html5${ELEMENT_END}`;return`${F}${chatNo}${F}${ftk}${F}0${F}${meta}${F}`}
+  private connectPayload(){return buildConnectPayload(this.opts.cookie)}
+  private joinPayload(){return buildJoinPayload(this.live,this.opts.cookie,this.handshakeProfile)}
 
   private anomaly(kind:ProtocolAnomaly['kind'],detail:string,raw?:string,code?:number){this.trace(`anomaly:${kind}`,detail,code);const a:ProtocolAnomaly={kind,streamerId:this.streamerId,source:'native',receivedAt:new Date().toISOString(),detail,raw,code};this.emit('protocol-anomaly',a)}
   private onMessage(raw:string){
@@ -54,7 +55,7 @@ export class NativeChatConnection extends EventEmitter {
     this.lastPacketCode=packet.code;if(!packet.lengthValid)this.anomaly('length-mismatch',`declared=${packet.declaredLength} actual=${packet.actualLength}`,raw,packet.code);
     const event=decodePacket(this.streamerId,packet,'native');if(event.category==='unknown')this.anomaly('unknown-code',`unclassified opcode ${packet.code}`,raw,packet.code);this.emit('event',event);
     if(packet.code===1)this.ws?.send(buildPacket(CMD_JOIN,this.joinPayload()));
-    if(packet.code===2){this.stopEnterWatchdog();if(this.opts.cookie?.AuthTicket){const synAck=packet.parts[6];if(synAck)this.ws?.send(buildPacket(CMD_ENTER_INFO,`${F}${synAck}${F}0${F}`))}this.state='entered';this.lastJoinAt=new Date().toISOString();this.nextRetryAt=undefined;this.lastError=undefined;this.trace('joined',undefined,packet.code);this.resolveEntered();if(this.attempt){this.emitSynthetic(-5,'RECONNECTED',{totalAttempts:this.attempt});this.attempt=0}}
+    if(packet.code===2){this.stopEnterWatchdog();this.trace('handshake-profile-confirmed',this.handshakeProfile);if(this.opts.cookie?.AuthTicket){const synAck=packet.parts[6];if(synAck)this.ws?.send(buildPacket(CMD_ENTER_INFO,`${F}${synAck}${F}0${F}`))}this.state='entered';this.lastJoinAt=new Date().toISOString();this.nextRetryAt=undefined;this.lastError=undefined;this.trace('joined',undefined,packet.code);this.resolveEntered();if(this.attempt){this.emitSynthetic(-5,'RECONNECTED',{totalAttempts:this.attempt});this.attempt=0}}
   }
 
   async waitUntilEntered(timeoutMs=10000){if(this.state==='entered')return;if(this.state==='closed'||this.state==='blocked')throw new Error(`connection ${this.state}`);return new Promise<void>((resolve,reject)=>{const timer=setTimeout(()=>{this.enteredWaiters=this.enteredWaiters.filter(x=>x.timer!==timer);reject(new Error('chat enter timeout'))},timeoutMs);this.enteredWaiters.push({resolve,reject,timer})})}
@@ -73,10 +74,10 @@ export class NativeChatConnection extends EventEmitter {
     this.state=kind==='offline'?'offline-wait':kind==='protocol'?'protocol-error':'reconnecting';this.lastError=reason;this.nextRetryAt=new Date(Date.now()+delay).toISOString();this.trace('reconnect-scheduled',`${kind}: ${reason}; delay=${delay}ms`);
     this.retry=setTimeout(()=>{this.retry=undefined;void this.connect()},delay);this.emit('reconnect-scheduled',{attempt:this.attempt,delay,reason,kind});
   }
-  private startEnterWatchdog(){this.stopEnterWatchdog();this.enterWatchdog=setTimeout(()=>{if(this.state!=='entered'&&!this.stopped){this.anomaly('join-timeout','JOIN_CHANNEL did not complete before watchdog');try{this.ws?.terminate()}catch{}}},this.opts.joinTimeoutMs)}
+  private startEnterWatchdog(){this.stopEnterWatchdog();this.enterWatchdog=setTimeout(()=>{if(this.state!=='entered'&&!this.stopped){const failed=this.handshakeProfile;if(this.opts.cookie?.AuthTicket){this.handshakeProfile=failed==='legacy-v1-ticket'?'browser-v2-null':'legacy-v1-ticket';this.handshakeSwitches++;this.trace('handshake-profile-fallback',`${failed} -> ${this.handshakeProfile}`)}this.anomaly('join-timeout',`JOIN_CHANNEL did not complete before watchdog; profile=${failed}`);try{this.ws?.terminate()}catch{}}},this.opts.joinTimeoutMs)}
   private stopEnterWatchdog(){if(this.enterWatchdog)clearTimeout(this.enterWatchdog);this.enterWatchdog=undefined}
   private startHeartbeat(){this.stopHeartbeat();this.heartbeat=setInterval(()=>{const ws=this.ws;if(!ws||ws.readyState!==WebSocket.OPEN)return;const now=Date.now();if(this.state==='entered'&&this.lastInboundAt&&now-this.lastInboundAt>this.opts.livenessTimeoutMs){this.anomaly('liveness-timeout',`no inbound packet for ${now-this.lastInboundAt}ms`);try{ws.terminate()}catch{}return}try{ws.send(buildPacket(CMD_PING,F))}catch{}},this.opts.pingIntervalMs);this.heartbeat.unref?.()}
   private stopHeartbeat(){if(this.heartbeat)clearInterval(this.heartbeat);this.heartbeat=undefined}
-  diagnostics(){return{state:this.state,attempt:this.attempt,lastInboundAt:this.lastInboundAt?new Date(this.lastInboundAt).toISOString():undefined,lastConnectAt:this.lastConnectAt,lastJoinAt:this.lastJoinAt,lastDisconnectAt:this.lastDisconnectAt,lastError:this.lastError,lastCloseCode:this.lastCloseCode,lastCloseReason:this.lastCloseReason,nextRetryAt:this.nextRetryAt,lastPacketCode:this.lastPacketCode,packetsIn:this.packetsIn,tlsVerification:!this.opts.allowInsecureTls,timeline:[...this.timeline]}}
+  diagnostics(){return{state:this.state,attempt:this.attempt,handshakeProfile:this.handshakeProfile,handshakeSwitches:this.handshakeSwitches,broadcastBno:this.broadcastBno,broadcastGeneration:this.broadcastGeneration,lastInboundAt:this.lastInboundAt?new Date(this.lastInboundAt).toISOString():undefined,lastConnectAt:this.lastConnectAt,lastJoinAt:this.lastJoinAt,lastDisconnectAt:this.lastDisconnectAt,lastError:this.lastError,lastCloseCode:this.lastCloseCode,lastCloseReason:this.lastCloseReason,nextRetryAt:this.nextRetryAt,lastPacketCode:this.lastPacketCode,packetsIn:this.packetsIn,tlsVerification:!this.opts.allowInsecureTls,timeline:[...this.timeline]}}
   async stop(){this.stopped=true;this.state='closed';this.stopHeartbeat();this.stopEnterWatchdog();if(this.retry)clearTimeout(this.retry);this.retry=undefined;this.rejectEntered(new Error('connection closed'));const ws=this.ws;this.ws=undefined;try{ws?.close(1000,'released')}catch{}}
 }

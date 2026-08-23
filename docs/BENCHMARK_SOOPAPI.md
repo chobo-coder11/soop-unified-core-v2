@@ -1,4 +1,4 @@
-# soopapi / reindeer benchmark notes — Unified Core v2.4
+# soopapi / reindeer benchmark notes — Unified Core v2.5
 
 Benchmark reference:
 
@@ -43,3 +43,20 @@ Benchmark reference:
 - TLS 인증서 검증 비활성화를 production 기본값으로 두는 방식
 
 Java sidecar는 계속 optional입니다. sidecar 장애가 Node Native/reindeer/soop.js observation을 막아서는 안 됩니다.
+
+## 2026-08 reindeer develop accuracy review
+
+The current `reindeer002/soop` develop branch was re-reviewed as a protocol reference. Useful differences incorporated into v2.5 as guarded behavior rather than blindly copied behavior:
+
+- authenticated JOIN reference uses `pver=2` and `auth_info=NULL`; Native Core keeps its previously validated profile as default and only tries this as a JOIN-watchdog fallback
+- `VIEWPRESET[0].bps` is kept separately and used for `view_bps` instead of assuming broadcast `BPS` is always the same value
+- opcode 127 is treated by reindeer as viewer data; because historical implementations disagree, v2.5 shape-checks the payload and preserves RAW instead of hard-coding either interpretation
+- viewer/exit semantics are treated as realtime presence evidence, not proof of physical viewing
+
+Not adopted from reindeer:
+
+- TLS certificate verification disable (`rejectUnauthorized:false`)
+- unbounded HTTP waits / wait-for-enter polling
+- close-without-core-level reconnect state machine
+
+The Native Core remains the primary independent implementation; reindeer is a fallback and protocol cross-check reference.

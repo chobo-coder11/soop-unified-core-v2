@@ -9,6 +9,8 @@ import{PROVIDER_PROVENANCE}from'./provider-provenance.js';
 import{withDeadline}from'./deadline.js';
 import type{AppConfig}from'../config.js';
 import type{Metrics}from'./metrics.js';
+import{canonicalizeChannelSnapshot,canonicalizeLiveSnapshot}from'../http/normalize.js';
+import{validateChannelSnapshot,validateLiveSnapshot}from'./snapshot-validation.js';
 
 export class ProviderRegistry{
  readonly native:NativeProvider;readonly reindeer:ReindeerProvider;readonly java:JavaSidecarProvider;readonly soopjs:SoopJsProvider;readonly reliability=new AdaptiveReliability();
@@ -24,6 +26,7 @@ export class ProviderRegistry{
   ] as const;
   const settled=await Promise.allSettled(calls.map(x=>x[1]));const out:ProviderObservation<T>[]=[];
   for(let i=0;i<settled.length;i++){const name=calls[i][0],r=settled[i];if(r.status==='fulfilled'){if(name==='java')out.push(...(r.value as ProviderObservation<T>[]));else out.push(r.value as ProviderObservation<T>)}else if(name==='java'){out.push(this.failure('soopapi',r.reason),this.failure('soop4j',r.reason))}else out.push(this.failure(name as ProviderName,r.reason))}
+  for(const o of out){if(!o.ok||!o.value)continue;o.value=(kind==='live'?canonicalizeLiveSnapshot(o.value as any,id):canonicalizeChannelSnapshot(o.value as any,id)) as T;const validation=kind==='live'?validateLiveSnapshot(o.value as any,id,o.provenance?.upstreamFamily==='soop-official-http'):validateChannelSnapshot(o.value as any,id);o.validationStatus=validation.status;o.validationIssues=validation.issues;if(validation.status==='invalid'){o.ok=false;o.error=`invalid_snapshot:${validation.issues.join(',')}`;this.metrics?.incLabel('soop_provider_invalid_snapshot_total',{provider:o.provider,kind})}}
   return out
  }
  async live(id:string):Promise<UnifiedResult<LiveSnapshot>>{const obs=await this.collect<LiveSnapshot>('live',id),result=liveConsensus(obs,(provider,o)=>this.reliability.weight(provider,'live',o));this.reliability.record('live',obs);this.record('live',obs,result);return result}

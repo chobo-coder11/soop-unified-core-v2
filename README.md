@@ -1,4 +1,4 @@
-# SOOP Unified Core v2.4.0 P0 Production Hardened
+# SOOP Unified Core v2.5.0 Accuracy Ultimate
 
 SOOP(구 아프리카TV)를 위한 **비공식 통합 API / 실시간 프로토콜 코어**입니다. 특정 BJ에 고정되지 않고 유효한 SOOP 스트리머 ID를 동적으로 조회·구독할 수 있습니다.
 
@@ -10,6 +10,39 @@ SOOP(구 아프리카TV)를 위한 **비공식 통합 API / 실시간 프로토�
 - `getCurrentThread/soopapi` v0.14.0 — Java 25, 광범위 이벤트 디코딩·연결 lifecycle·RAW fixture test
 - `zzik2/soop4j` 0.0.3 — Java live/channel/chat/viewer 조회
 - `taejeong1126/soop.js` — 브라우저 fallback, archived이므로 기본 OFF
+
+## v2.5.0 Accuracy Ultimate 핵심 고도화
+
+### 정확성 우선 판정
+
+- **Strict SOOP wire parser**: `"0"`/`"1"`, 빈 문자열, null, 숫자 문자열을 JS truthiness에 맡기지 않고 필드 의미대로 정규화합니다.
+- Native/reindeer/Java/browser fallback 결과는 consensus 전에 동일 canonicalizer를 통과합니다.
+- `online=true`인데 BNO가 없거나 음수 viewer/비정상 chat port 같은 모순 snapshot은 **quarantine**되어 투표에서 제외됩니다.
+- `BNO`를 방송 identity로 사용하고 generation을 추적합니다. 방송이 재시작되어 BNO가 바뀌면 이전 channel cache를 폐기합니다.
+- `/state`는 `live.BNO`와 `station.broadNo`가 다르면 cache를 우회해 한 번 즉시 재검증하고, 계속 다를 때만 `accuracy.broadcastIdentity.status=mismatch`로 판정합니다.
+- 실시간 socket이 붙은 BNO와 현재 live BNO도 `accuracy.realtimeBinding`에서 비교합니다.
+
+### Evidence consensus v2
+
+- provider 개수 자체를 독립 증거로 세지 않습니다. Native/reindeer/soopapi/soop4j처럼 같은 `soop-official-http` upstream family를 공유하면 **family당 한 표 수준으로 cap**합니다.
+- 모든 live 핵심 필드(`online`, `BNO`, `CHATNO`, viewer, title, category, password, chat endpoint 등)를 필드별로 합의합니다.
+- 각 필드는 `agreement`, `confidence`, `upstreamFamilies`, `temporalSkewMs`, `importance`, conflicting providers를 제공합니다.
+- provider 요청 시작/응답 시각을 기록하여 서로 다른 시점의 값을 완전히 같은 샘플처럼 취급하지 않습니다.
+- confidence는 통계적 확률이 아니라 독립성·합의·시간차·source 수를 반영한 **evidence score**입니다.
+
+### SOOP WebSocket 정확성
+
+- 기존 validated JOIN profile(`pver=1`, ticket auth)을 기본으로 유지합니다.
+- JOIN watchdog timeout 시 reindeer 최신 develop에서 관측한 browser-compatible profile(`pver=2`, `auth_info=NULL`)로 자동 fallback하고 성공 profile을 계속 사용합니다.
+- `VIEWPRESET`의 실제 `view_bps`를 JOIN metadata에 반영합니다.
+- socket reconnect 시 BNO 변화도 generation change로 추적합니다.
+- opcode `127`은 특정 의미를 강제하지 않고 payload shape를 검사해 viewer-presence candidate 또는 unclassified로 보존하여 잘못된 subscriber-status 단정을 제거했습니다.
+
+### 운영 / 검증
+
+- Studio v2.5에서 BNO↔broadNo, socket BNO, generation, handshake profile, 필드별 evidence score를 방송별로 확인합니다.
+- 기존 deadline/partial-state/stale 표시/WS gap+resume/hot-path 최적화/flight recorder 기능은 그대로 유지합니다.
+- 로컬 compiled regression: **66 pass / 0 fail / 2 WS runtime tests skipped when `ws` runtime is unavailable**. 실제 clean dependency build와 WS integration은 GitHub CI gate에서 검증합니다.
 
 ## v2.4.0 P0 핵심 고도화
 
@@ -154,7 +187,7 @@ WebSocket subscribe (protocol v4):
 - repository integrity check
 - TypeScript strict/full compile (`tsc --noEmit`)
 - clean TypeScript build
-- compiled JavaScript 회귀 테스트 **46 passed / 0 failed (2 WS runtime integration tests skipped locally because the offline validation workspace lacks the installed `ws` runtime package)**
+- compiled JavaScript 회귀 테스트 **66 passed / 0 failed (2 WS runtime integration tests skipped locally because the offline validation workspace lacks the installed `ws` runtime package)**
 - Java sidecar API-shape compile 검증
 - TLS insecure-default / raw session-token exposure / 비밀정보 로그 패턴 source scan
 - ZIP 생성 후 archive integrity 및 금지 파일(`node_modules`, `.env`) 검사

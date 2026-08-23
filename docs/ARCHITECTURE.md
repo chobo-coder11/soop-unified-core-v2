@@ -1,4 +1,4 @@
-# SOOP Unified Core v2.4 Architecture
+# SOOP Unified Core v2.5 Architecture
 
 ```text
                            SOOP
@@ -101,3 +101,21 @@ accepted realtime event / protocol anomaly
 ## Trust boundary
 
 프로토콜 opcode 존재와 일반 사용자의 관리자 데이터 접근 가능성은 별개입니다. Unified Core는 `stable`, `conditional`, `raw-only`로 구분하며 불명확하거나 권한 의존적인 패킷을 고수준 의미로 승격하지 않습니다. Code `52`는 `UNCLASSIFIED_MODERATION_52` RAW 신호로만 유지합니다.
+
+## v2.5 accuracy pipeline
+
+```text
+provider response
+  -> strict wire canonicalization
+  -> snapshot invariant validation / quarantine
+  -> observation timing metadata
+  -> upstream-family grouping
+  -> per-field consensus
+  -> BNO/broadNo broadcast-identity validation
+  -> socket-BNO binding validation
+  -> API result + evidence trace
+```
+
+The architecture intentionally separates implementation diversity from upstream diversity. Four libraries reading one SOOP upstream family do not become four independent truth sources.
+
+Broadcast identity is generation-based. A new BNO invalidates channel cache for that streamer and the realtime connection records the BNO from which it was created. `/state` exposes mismatches rather than silently combining generations.

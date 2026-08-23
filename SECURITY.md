@@ -1,4 +1,4 @@
-# Security policy — v2.4
+# Security policy — v2.5
 
 ## Data / privilege boundary
 

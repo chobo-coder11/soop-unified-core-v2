@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.5.0 Accuracy Ultimate
+
+- Added strict SOOP wire normalization for string booleans, blank numerics, BNOs and VIEWPRESET data.
+- Added runtime snapshot canonicalization and impossible-snapshot quarantine before consensus.
+- Added upstream-family evidence voting so correlated wrappers cannot inflate independent confidence.
+- Extended field-level consensus to live identity, metadata, realtime endpoint and numeric fields with temporal-skew/evidence metadata.
+- Added BNO generation tracking, live BNO ↔ station broadNo cross-validation and one-shot mismatch revalidation.
+- Added realtime socket-BNO binding visibility in `/state` and Studio.
+- Added dual authenticated JOIN profiles with watchdog-driven fallback and VIEWPRESET-aware view_bps.
+- Reclassified opcode 127 decoding as shape-checked viewer-presence candidate/unclassified instead of a hard subscriber-status assumption.
+- Studio now exposes broadcast identity, generation, handshake profile and per-field evidence.
+- Accuracy/regression suite expanded to 66 local compiled passes (2 WS runtime tests remain environment-skipped without installed ws).
+
+
 ## 2.4.0 P0 Production Hardened
 
 - Added hard provider deadlines and partial-success collection so one hung fallback cannot block the whole request.
