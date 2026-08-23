@@ -1,0 +1,82 @@
+name: ChatGPT Pinball RC12 Build
+
+on:
+  push:
+    branches:
+      - tmp-pinball-rc12-build
+    paths:
+      - '.chatgpt-build/pinball-rc12/**'
+      - '.github/workflows/chatgpt-pinball-rc12.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.23.x'
+
+      - name: Reconstruct source
+        shell: pwsh
+        run: |
+          $parts = Get-ChildItem '.chatgpt-build/pinball-rc12/part*.txt' | Sort-Object Name
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\pinball-rc12-source.zip", [Convert]::FromBase64String($b64))
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\pinball" | Out-Null
+          Expand-Archive "$env:RUNNER_TEMP\pinball-rc12-source.zip" "$env:RUNNER_TEMP\pinball" -Force
+
+      - name: Pin dependency
+        shell: pwsh
+        working-directory: ${{ runner.temp }}\pinball
+        run: |
+          go get github.com/jchv/go-webview2@v0.0.0-20260205173254-56598839c808
+          go mod tidy
+
+      - name: Unit tests
+        shell: pwsh
+        working-directory: ${{ runner.temp }}\pinball
+        run: |
+          go test ./...
+          go vet ./...
+
+      - name: Build Windows GUI
+        shell: pwsh
+        working-directory: ${{ runner.temp }}\pinball
+        env:
+          CGO_ENABLED: '0'
+          GOOS: windows
+          GOARCH: amd64
+        run: |
+          go build -trimpath -ldflags='-s -w -H=windowsgui' -o 'SOOP Pinball Collector by BWK.exe' .
+          if (-not (Test-Path 'SOOP Pinball Collector by BWK.exe')) { throw 'EXE build failed' }
+
+      - name: Package verified deliverables
+        shell: pwsh
+        working-directory: ${{ runner.temp }}\pinball
+        run: |
+          $out = "$env:RUNNER_TEMP\deliverables"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Copy-Item 'SOOP Pinball Collector by BWK.exe' "$out\SOOP Pinball Collector by BWK.exe"
+          Copy-Item 'README.txt' "$out\SOOP Pinball Collector by BWK - README.txt"
+          $hash = (Get-FileHash 'SOOP Pinball Collector by BWK.exe' -Algorithm SHA256).Hash.ToLower()
+          "$hash  SOOP Pinball Collector by BWK.exe" | Set-Content "$out\SOOP Pinball Collector by BWK.sha256.txt" -Encoding ascii
+          Remove-Item 'SOOP Pinball Collector by BWK.exe'
+          Compress-Archive -Path * -DestinationPath "$out\SOOP Pinball Collector by BWK - Source.zip" -CompressionLevel Optimal
+          Get-ChildItem $out | Format-Table Name, Length
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: soop-pinball-collector-rc12
+          path: ${{ runner.temp }}\deliverables\*
+          if-no-files-found: error
+          retention-days: 1
