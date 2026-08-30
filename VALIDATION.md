@@ -1,38 +1,62 @@
-# Validation record — v2.5.0 Accuracy Ultimate
+# Validation record — v2.6.0 Accuracy Hardened
 
-Validation date: 2026-08-23 (Asia/Seoul)
+Validation date: 2026-08-31 (Asia/Seoul)
 
-## Local validation
+## CI authority
 
-- Repository integrity: PASS after v2.5 critical-file expansion.
-- Accuracy-only pure TypeScript modules (`normalize`, `consensus`, broadcast identity/generation, snapshot validation, handshake): strict compile PASS.
-- Compiled regression suite: **66 passed / 0 failed / 2 WS runtime integration tests environment-skipped** because the local workspace does not contain the installed `ws` runtime package.
-- Studio browser JavaScript extraction: `node --check` PASS.
+The authoritative promotion gate is GitHub CI on the exact PR head. Main is not promoted until all of the following pass:
 
-## New v2.5 regression coverage
+- repository integrity
+- Node 22 build + source tests + compiled tests
+- Node 24 build + source tests + compiled tests
+- Java 25 sidecar compile
+- Node Docker image build
+- Java sidecar Docker image build
 
-- string `"0"` is false, not truthy; blank numerics remain unknown instead of becoming zero
-- zero is still preserved when zero is a valid viewer/favorite/subscriber count
-- VIEWPRESET bitrate is kept separately from broadcast BPS
-- fallback provider snapshots are runtime-canonicalized before consensus
-- online-without-BNO, negative viewers and invalid ports are quarantined before voting
-- correlated implementations sharing one upstream family cannot inflate independent confidence
-- independent BNO disagreement produces an uncertain result
-- BNO generation increments only when broadcast identity changes
-- BNO ↔ station broadNo mismatch is represented explicitly
-- both authenticated JOIN profiles produce expected metadata; fallback profile is not the default
-- opcode 127 viewer-shaped payload is a candidate and ambiguous payload remains unclassified
+## New v2.6 regression coverage
 
-## Existing v2.4 coverage retained
+- delimiter-free opcode 121 JSON is parsed directly from packet payload
+- field-delimited opcode 121 JSON remains compatible
+- `CHALLENGE_GIFT` becomes `CHALLENGE_MISSION_GIFTED` / `challenge_mission`
+- observed opcode-121 `GIFT` becomes `BATTLE_MISSION_GIFTED` / `battle_mission`
+- snake_case and camelCase donor/count aliases normalize consistently
+- JSON Unicode escapes decode to the real nickname
+- unknown opcode-121 subtype stays `MISSION` / `notification` and is never guessed as a donation
+- malformed opcode-121 JSON becomes `raw-only` and cannot create a false donation
+- opcode 125 settlement JSON is preserved without invented challenge/battle semantics
+- specialized mission events still match legacy WebSocket `MISSION` subscriptions
+- specialized mission events also match specialized type, numeric opcode and `donation` category filters
 
-Provider deadlines, partial state, stale freshness, signal-isolated adaptive reliability, circuit breaker recovery, dedup occurrence matching, protocol drift, RAW fixture replay, reconnect classification, metrics, security source invariants, rate-limit bounds, WebSocket gap/replay/resume and connection diagnostics remain covered by the existing suite.
+## Existing accuracy coverage retained
 
-## Clean-build gate
-
-This workspace cannot complete a clean npm registry install. The full project compiler therefore sees missing external `@types/node`, `@types/ws` and `ws` packages locally even though v2.5 modules themselves pass targeted strict compilation. GitHub CI is the authoritative clean environment gate and must pass Node 22 and Node 24 build/source/compiled tests before the v2.5 commit is promoted to `main`.
+- strict boolean/number/BNO normalization
+- zero-value preservation where zero is legitimate
+- VIEWPRESET bitrate handling
+- provider snapshot canonicalization before consensus
+- impossible-snapshot quarantine
+- upstream-family evidence independence
+- BNO broadcast generation and BNO ↔ broadNo identity checks
+- socket BNO ↔ current live BNO binding diagnostics
+- dual authenticated JOIN profiles and watchdog fallback
+- opcode 127 shape-aware ambiguity preservation
+- provider deadlines / partial state / stale freshness
+- adaptive reliability / circuit breaker recovery
+- occurrence-safe dedup
+- protocol drift + RAW fixture replay
+- reconnect classification
+- metrics, security invariants, rate-limit bounds
+- downstream WebSocket gap/replay/resume and connection diagnostics
 
 ## Real-network limitations
 
-Even a green CI build does not prove long-duration SOOP behavior. The included smoke/soak workflows remain necessary for real public-stream verification, especially JOIN fallback behavior and protocol-drift monitoring.
+A green deterministic CI run proves repository/build/regression integrity, not permanent compatibility with an external platform. SOOP can change wire semantics or availability after the release. Real public-stream smoke/soak workflows remain necessary for long-duration verification.
 
-No claim is made that the heuristic evidence confidence score is a calibrated probability.
+For this reason the core does not claim an impossible "0% error rate". Its accuracy policy is instead:
+
+1. normalize only verified semantics,
+2. preserve unknown data rather than guess,
+3. expose RAW/diagnostic evidence,
+4. convert observed wire behavior into regression fixtures,
+5. maintain backward compatibility for existing API consumers.
+
+Evidence `confidence` values are operational scores, not calibrated statistical probabilities.
