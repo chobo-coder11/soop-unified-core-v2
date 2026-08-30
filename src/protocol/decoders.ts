@@ -11,11 +11,11 @@ const views=(root:Obj)=>[root,obj(root.data),obj(root.payload)].filter(Boolean)a
 const pick=(root:Obj,keys:string[])=>{for(const v of views(root))for(const k of keys)if(v[k]!==undefined&&v[k]!==null&&v[k]!=='')return v[k]};
 const s=(v:unknown)=>typeof v==='string'?v:String(v??'');
 const mn=(v:unknown)=>{const x=Number(v);return Number.isFinite(x)?x:undefined};
-const mb=(v:unknown)=>typeof v==='boolean'?v:v==='true'||v==='1'?true:v==='false'||v==='0'?false:undefined;
+const mb=(v:unknown)=>typeof v==='boolean'?v:v===1||v==='true'||v==='1'?true:v===0||v==='false'||v==='0'?false:undefined;
 function decodeMission(e:CanonicalEvent,p:ParsedPacket,a:string[]){
  const data=missionObj(p,a);if(!data){e.supportLevel='raw-only';e.payload={data:j(p.payload||a[0]||a.join('')),mission:{parseStatus:'invalid',rawPayload:p.payload}};return}
- const rawType=s(pick(data,['type'])).toUpperCase(),userId=s(pick(data,['user_id','userId','sender_id','senderId'])),nickname=s(pick(data,['user_nick','userNickname','sender_nick','senderNickname'])),amount=mn(pick(data,['gift_count','count']));
- const mission=o([['rawType',rawType||undefined],['chno',pick(data,['chno'])],['isRelay',mb(pick(data,['is_relay','isRelay']))],['key',pick(data,['key'])],['title',pick(data,['title'])],['missionStatus',pick(data,['mission_status','missionStatus'])],['uuid',pick(data,['uuid'])]]);
+ const rawType=s(pick(data,['type'])).trim().toUpperCase(),userId=s(pick(data,['user_id','userId','sender_id','senderId'])),nickname=s(pick(data,['user_nick','userNickname','user_nickname','sender_nick','senderNickname'])),amount=mn(pick(data,['gift_count','giftCount','count']));
+ const mission=o([['rawType',rawType||undefined],['chno',pick(data,['chno'])],['isRelay',mb(pick(data,['is_relay','isRelay']))],['key',pick(data,['key'])],['title',pick(data,['title'])],['missionStatus',pick(data,['mission_status','missionStatus'])],['uuid',pick(data,['uuid'])],['fanNumber',pick(data,['fan_number','fanNumber'])],['imageUrl',pick(data,['image_url','imageUrl'])],['relaysBroad',pick(data,['relays_broad','relaysBroad'])]]);
  e.payload={data,mission};e.supportLevel='conditional';
  if(rawType==='CHALLENGE_GIFT'||rawType==='GIFT'){
   const challenge=rawType==='CHALLENGE_GIFT';e.type=challenge?'CHALLENGE_MISSION_GIFTED':'BATTLE_MISSION_GIFTED';e.description=challenge?'Challenge Mission Gift':'Battle Mission Gift';e.category='donation';
