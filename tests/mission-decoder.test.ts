@@ -1,4 +1,4 @@
-import test from'node:test';import assert from'node:assert/strict';import{buildPacket,parsePacket}from'../src/protocol/packet.js';import{decodePacket}from'../src/protocol/decoders.js';
+import test from'node:test';import assert from'node:assert/strict';import{buildPacket,parsePacket}from'../src/protocol/packet.js';import{decodePacket}from'../src/protocol/decoders.js';import{F}from'../src/protocol/constants.js';
 
 const decode=(payload:Record<string,unknown>)=>decodePacket('bach023',parsePacket(buildPacket(121,JSON.stringify(payload))));
 
@@ -12,6 +12,16 @@ test('opcode 121 CHALLENGE_GIFT is normalized as challenge mission donation even
 test('opcode 121 GIFT is normalized as battle mission donation from observed SOOP wire semantics',()=>{
  const e=decode({type:'GIFT',chno:484,is_relay:false,key:71873,title:'종수 리듬천국 미션',user_id:'rookie3333',user_nick:'부울경',gift_count:7});
  assert.equal(e.type,'BATTLE_MISSION_GIFTED');assert.equal(e.category,'donation');assert.deepEqual(e.user,{id:'rookie3333',nickname:'부울경'});assert.equal(e.donation?.kind,'battle_mission');assert.equal(e.donation?.amount,7);assert.equal((e.payload.mission as any).rawType,'GIFT');
+});
+
+test('opcode 121 field-delimited mission packet is normalized identically',()=>{
+ const json=JSON.stringify({type:'GIFT',user_id:'u2',user_nick:'닉2',gift_count:2,key:22});const packet=parsePacket(buildPacket(121,`${F}${json}${F}`));const e=decodePacket('bach023',packet);
+ assert.equal(e.type,'BATTLE_MISSION_GIFTED');assert.deepEqual(e.user,{id:'u2',nickname:'닉2'});assert.equal(e.donation?.amount,2);assert.equal((e.payload.mission as any).key,22);
+});
+
+test('opcode 121 JSON unicode escapes are decoded to the real nickname',()=>{
+ const raw='{"type":"CHALLENGE_GIFT","user_id":"rookie3333","user_nick":"\\ubd80\\uc6b8\\uacbd","gift_count":1}';const e=decodePacket('bach023',parsePacket(buildPacket(121,raw)));
+ assert.equal(e.user?.nickname,'부울경');assert.equal(e.donation?.kind,'challenge_mission');
 });
 
 test('opcode 121 accepts camelCase aliases without weakening mission type classification',()=>{
