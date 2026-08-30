@@ -3,6 +3,26 @@ const n=(v:string|undefined,f=0)=>{const x=Number(v);return Number.isFinite(x)?x
 const j=(v:string|undefined):unknown=>{if(!v)return{};try{return JSON.parse(v)}catch{return{text:v}}};
 const o=(e:[string,unknown][])=>Object.fromEntries(e.filter(([,v])=>v!==undefined&&v!==''));
 const userIdLike=(v:string|undefined)=>Boolean(v&&/^[A-Za-z0-9_-]{1,64}$/.test(v));
+type Obj=Record<string,unknown>;
+const obj=(v:unknown):Obj|undefined=>v!==null&&typeof v==='object'&&!Array.isArray(v)?v as Obj:undefined;
+const parseObj=(v:string|undefined):Obj|undefined=>{if(!v)return;try{return obj(JSON.parse(v))}catch{return}};
+const missionObj=(p:ParsedPacket,a:string[])=>{for(const v of [p.payload,...a]){const x=parseObj(v);if(x)return x}return undefined};
+const views=(root:Obj)=>[root,obj(root.data),obj(root.payload)].filter(Boolean)as Obj[];
+const pick=(root:Obj,keys:string[])=>{for(const v of views(root))for(const k of keys)if(v[k]!==undefined&&v[k]!==null&&v[k]!=='')return v[k]};
+const s=(v:unknown)=>typeof v==='string'?v:String(v??'');
+const mn=(v:unknown)=>{const x=Number(v);return Number.isFinite(x)?x:undefined};
+const mb=(v:unknown)=>typeof v==='boolean'?v:v===1||v==='true'||v==='1'?true:v===0||v==='false'||v==='0'?false:undefined;
+function decodeMission(e:CanonicalEvent,p:ParsedPacket,a:string[]){
+ const data=missionObj(p,a);if(!data){e.supportLevel='raw-only';e.payload={data:j(p.payload||a[0]||a.join('')),mission:{parseStatus:'invalid',rawPayload:p.payload}};return}
+ const rawType=s(pick(data,['type'])).trim().toUpperCase(),userId=s(pick(data,['user_id','userId','sender_id','senderId'])),nickname=s(pick(data,['user_nick','userNickname','user_nickname','sender_nick','senderNickname'])),amount=mn(pick(data,['gift_count','giftCount','count']));
+ const mission=o([['rawType',rawType||undefined],['chno',pick(data,['chno'])],['isRelay',mb(pick(data,['is_relay','isRelay']))],['key',pick(data,['key'])],['title',pick(data,['title'])],['missionStatus',pick(data,['mission_status','missionStatus'])],['uuid',pick(data,['uuid'])],['fanNumber',pick(data,['fan_number','fanNumber'])],['imageUrl',pick(data,['image_url','imageUrl'])],['relaysBroad',pick(data,['relays_broad','relaysBroad'])]]);
+ e.payload={data,mission};e.supportLevel='conditional';
+ if(rawType==='CHALLENGE_GIFT'||rawType==='GIFT'){
+  const challenge=rawType==='CHALLENGE_GIFT';e.type=challenge?'CHALLENGE_MISSION_GIFTED':'BATTLE_MISSION_GIFTED';e.description=challenge?'Challenge Mission Gift':'Battle Mission Gift';e.category='donation';
+  if(userId||nickname)e.user={...(userId?{id:userId}:{}),...(nickname?{nickname}:{})};
+  e.donation={kind:challenge?'challenge_mission':'battle_mission',...(amount!==undefined?{amount}:{})};
+ }
+}
 export function decodePacket(streamerId:string,p:ParsedPacket,source:'native'|'reindeer'='native'):CanonicalEvent{
  const d=eventDescriptor(p.code),a=p.parts;const e:CanonicalEvent={id:randomUUID(),streamerId,code:p.code,type:d.name,description:d.description,category:d.category,supportLevel:d.supportLevel,source,receivedAt:new Date().toISOString(),payload:{parts:a},raw:p.raw};
  switch(p.code){
@@ -44,9 +64,9 @@ export function decodePacket(streamerId:string,p:ParsedPacket,source:'native'|'r
   case 118:e.user={id:a[0],nickname:a[1]};e.target={id:a[2],nickname:a[3]};e.donation={kind:'ogq_emoticon_gift',extra:{title:a[4],imageUrl:a[5]}};break;
   case 119:e.payload={data:j(a[0])};break;
   case 120:e.target={id:a[0],nickname:a[1]};e.donation={kind:'gem_item',extra:{itemName:a[2]}};break;
-  case 121:e.payload={data:j(a[0]??a.join(''))};break;
+  case 121:decodeMission(e,p,a);break;
   case 122:e.message=a[0];e.payload={caption:a};break;
-  case 125:e.payload={data:j(a[0]??a.join(''))};break;
+  case 125:{const data=missionObj(p,a);e.supportLevel='conditional';e.payload={data:data??j(p.payload||a[0]||a.join(''))};break}
   case 127:{const candidates=a.filter((v,i)=>i%2===0&&userIdLike(v)),presenceShape=candidates.length>0&&(a.length===1||candidates.length>=2||candidates.length>=Math.ceil(a.length/3));e.payload=presenceShape?{schema:'viewer-presence-candidate',userIds:candidates,parts:a,confidence:a.length>2?.85:.55}:{schema:'unclassified-127',parts:a,confidence:.25};break}
   default:e.payload={parts:a};
  }

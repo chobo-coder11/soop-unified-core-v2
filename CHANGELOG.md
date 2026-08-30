@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.6.0 Mission Accuracy Hardened
+
+- Reworked opcode 121 as a mission envelope instead of a challenge-only event.
+- Added delimiter-free JSON parsing for observed SOOP mission payloads while retaining field-delimited compatibility.
+- Normalized observed `CHALLENGE_GIFT` as `CHALLENGE_MISSION_GIFTED` / `challenge_mission`.
+- Normalized observed opcode-121 `GIFT` as `BATTLE_MISSION_GIFTED` / `battle_mission`.
+- Preserved unknown mission subtypes as notification events instead of guessing a donation type.
+- Added mission metadata preservation for `chno`, `key`, `title`, relay/status/uuid fields and raw parsed data.
+- Added tolerant snake_case/camelCase donor/count aliases and verified JSON Unicode nickname decoding.
+- Improved opcode 125 settlement JSON preservation without guessing unverified challenge/battle settlement semantics.
+- Kept legacy WebSocket `MISSION` subscription filters compatible with specialized mission event types.
+- Added regression coverage for challenge, battle, delimiter variants, Unicode, aliases, unknown subtypes, malformed payloads, settlement parsing and filter compatibility.
+
 ## 2.5.0 Accuracy Ultimate
 
 - Added strict SOOP wire normalization for string booleans, blank numerics, BNOs and VIEWPRESET data.

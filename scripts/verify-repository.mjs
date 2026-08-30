@@ -30,6 +30,8 @@ const requiredFiles = [
   'tests/broadcast-identity.test.ts',
   'tests/handshake.test.ts',
   'tests/decoder-127.test.ts',
+  'tests/mission-decoder.test.ts',
+  'tests/ws-filter-compat.test.ts',
   'tests/snapshot-validation.test.ts',
   'tests/reliability.test.ts',
   'tests/drift.test.ts',

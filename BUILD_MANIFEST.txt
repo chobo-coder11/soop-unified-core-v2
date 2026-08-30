@@ -1,15 +1,29 @@
-SOOP Unified Core v2.5.0 Accuracy Ultimate build manifest
-Generated: 2026-08-23 Asia/Seoul
+SOOP Unified Core v2.6.0 Accuracy Hardened build manifest
+Generated: 2026-08-31 Asia/Seoul
 
-LOCAL VALIDATION SUMMARY
-- Repository integrity: PASS
-- Accuracy-only pure TypeScript strict compile: PASS
-- Compiled regression tests: 66 PASS / 0 FAIL / 2 WS runtime tests environment-skipped
-- Studio extracted browser JS syntax: PASS
-- Full clean Node 22/24 install/build/test: GATED BY GITHUB CI before main promotion
-- Real SOOP smoke / long soak: NOT CLAIMED by offline local workspace
+VALIDATION GATES
+- Repository integrity: REQUIRED
+- TypeScript Node 22/24 build: REQUIRED
+- Source regression tests: REQUIRED
+- Compiled regression tests: REQUIRED
+- Java 25 sidecar compile: REQUIRED
+- Node and Java Docker image build: REQUIRED
+- Real SOOP smoke / soak: separate network validation; not implied by CI
 
-V2.5 ACCURACY CORE
+V2.6 MISSION ACCURACY
+- opcode 121 treated as mission envelope, not challenge-only
+- delimiter-free and field-delimited mission JSON parsing
+- CHALLENGE_GIFT -> CHALLENGE_MISSION_GIFTED / challenge_mission
+- opcode-121 GIFT -> BATTLE_MISSION_GIFTED / battle_mission
+- donor/count snake_case + camelCase compatibility
+- JSON Unicode nickname decoding
+- chno/key/title/relay/status/uuid + parsed mission data preservation
+- unknown subtype remains notification; malformed payload becomes raw-only
+- opcode 125 settlement payload preservation without unverified subtype guessing
+- legacy MISSION WebSocket subscription compatibility retained
+- dedicated mission and filter regression tests required by repository integrity
+
+V2.5 ACCURACY CORE RETAINED
 - strict SOOP wire normalization and fallback canonicalization
 - impossible snapshot quarantine
 - upstream-family evidence consensus
@@ -32,4 +46,5 @@ V2.4 P0 HARDENING RETAINED
 
 IMPORTANT
 Evidence confidence is an operational heuristic score, not a calibrated probability.
+Unknown protocol semantics are preserved rather than guessed.
 The release tree intentionally excludes node_modules, .env and credentials.

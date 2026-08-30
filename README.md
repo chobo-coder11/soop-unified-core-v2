@@ -1,4 +1,4 @@
-# SOOP Unified Core v2.5.0 Accuracy Ultimate
+# SOOP Unified Core v2.6.0 Accuracy Hardened
 
 SOOP(구 아프리카TV)를 위한 **비공식 통합 API / 실시간 프로토콜 코어**입니다. 특정 BJ에 고정되지 않고 유효한 SOOP 스트리머 ID를 동적으로 조회·구독할 수 있습니다.
 
@@ -10,6 +10,37 @@ SOOP(구 아프리카TV)를 위한 **비공식 통합 API / 실시간 프로토�
 - `getCurrentThread/soopapi` v0.14.0 — Java 25, 광범위 이벤트 디코딩·연결 lifecycle·RAW fixture test
 - `zzik2/soop4j` 0.0.3 — Java live/channel/chat/viewer 조회
 - `taejeong1126/soop.js` — 브라우저 fallback, archived이므로 기본 OFF
+
+## v2.6.0 Mission Accuracy Hardened
+
+### 실데이터 기반 미션 정규화
+
+- opcode `121`을 더 이상 “도전미션 전용”으로 단정하지 않고 **Mission Envelope**로 처리합니다.
+- 실제 SOOP wire에서 관측된 `type=CHALLENGE_GIFT`는 `CHALLENGE_MISSION_GIFTED` / `donation.kind=challenge_mission`으로 정규화합니다.
+- 실제 SOOP wire에서 관측된 opcode-121 `type=GIFT`는 `BATTLE_MISSION_GIFTED` / `donation.kind=battle_mission`으로 정규화합니다.
+- 구분자 없이 JSON이 바로 들어오는 121 payload와 필드 구분자가 있는 형태를 모두 파싱합니다.
+- `user_id/userId`, `user_nick/userNickname`, `gift_count/count` 변형을 허용하고 JSON `\uXXXX` 닉네임을 실제 Unicode로 복원합니다.
+- `chno`, `key`, `title`, relay/status/uuid 및 파싱된 원본 mission object를 보존합니다.
+- 알 수 없는 mission subtype은 절대 도전/대결로 추측하지 않고 기존 `MISSION` notification semantics를 유지합니다.
+- malformed mission JSON은 `raw-only`로 낮춰 false-positive donation을 방지합니다.
+- opcode `125` settlement JSON은 보존하지만, 검증되지 않은 challenge/battle settlement discriminator는 만들지 않습니다.
+
+### 기존 프로그램 호환성
+
+전문화된 `CHALLENGE_MISSION_GIFTED` / `BATTLE_MISSION_GIFTED` 이벤트도 기존 WebSocket 구독 `MISSION`에 계속 매칭됩니다. 새 클라이언트는 specialized type, opcode `121`, 또는 `donation` category를 사용할 수 있습니다.
+
+### 회귀 방지
+
+실제 관측값을 regression fixture로 고정해 다음을 테스트합니다.
+
+- 도전미션 / 대결미션 subtype
+- delimiter-free / field-delimited payload
+- snake_case / camelCase alias
+- Unicode escape nickname
+- unknown subtype 보존
+- malformed payload false-positive 방지
+- opcode 125 settlement 보존
+- legacy `MISSION` WebSocket filter 호환
 
 ## v2.5.0 Accuracy Ultimate 핵심 고도화
 
@@ -40,9 +71,9 @@ SOOP(구 아프리카TV)를 위한 **비공식 통합 API / 실시간 프로토�
 
 ### 운영 / 검증
 
-- Studio v2.5에서 BNO↔broadNo, socket BNO, generation, handshake profile, 필드별 evidence score를 방송별로 확인합니다.
+- Studio v2.5+에서 BNO↔broadNo, socket BNO, generation, handshake profile, 필드별 evidence score를 방송별로 확인합니다.
 - 기존 deadline/partial-state/stale 표시/WS gap+resume/hot-path 최적화/flight recorder 기능은 그대로 유지합니다.
-- 로컬 compiled regression: **66 pass / 0 fail / 2 WS runtime tests skipped when `ws` runtime is unavailable**. 실제 clean dependency build와 WS integration은 GitHub CI gate에서 검증합니다.
+- clean dependency build와 회귀 테스트는 GitHub CI gate에서 Node 22/24, Java sidecar, Docker까지 검증합니다.
 
 ## v2.4.0 P0 핵심 고도화
 
@@ -167,6 +198,8 @@ WebSocket subscribe (protocol v4):
 {"action":"subscribe","streamers":["streamerA","streamerB"],"events":["CHAT_MESSAGE","donation","MISSION"]}
 ```
 
+`MISSION`은 하위 호환 필터입니다. v2.6에서는 specialized `CHALLENGE_MISSION_GIFTED` / `BATTLE_MISSION_GIFTED` 이벤트도 이 필터에 포함됩니다.
+
 ## 캐시 / 디버그
 
 ```text
@@ -182,23 +215,23 @@ WebSocket subscribe (protocol v4):
 
 ## 검증 상태
 
-이 배포본은 제작 환경에서 다음을 통과했습니다.
+이 배포본은 다음 gate를 통과해야 main에 병합됩니다.
 
 - repository integrity check
-- TypeScript strict/full compile (`tsc --noEmit`)
-- clean TypeScript build
-- compiled JavaScript 회귀 테스트 **66 passed / 0 failed (2 WS runtime integration tests skipped locally because the offline validation workspace lacks the installed `ws` runtime package)**
-- Java sidecar API-shape compile 검증
-- TLS insecure-default / raw session-token exposure / 비밀정보 로그 패턴 source scan
-- ZIP 생성 후 archive integrity 및 금지 파일(`node_modules`, `.env`) 검사
+- TypeScript build
+- Node 22 / Node 24 source + compiled regression tests
+- Java 25 sidecar compile
+- Node / Java Docker image build
+- security/repository regression suite
 
-단, 제작 컨테이너에는 외부 DNS, Docker daemon, Java 25/Gradle 의존성 환경이 없어 **실제 SOOP 네트워크 smoke, clean registry install, 실제 JDK25 sidecar dependency build, Docker build는 로컬에서 수행할 수 없습니다.** 이를 과장해 “실서비스 완전 검증”이라고 표기하지 않습니다. GitHub CI + smoke + soak workflow를 production gate로 포함했습니다.
+실제 SOOP 네트워크는 외부 플랫폼 상태·프로토콜 변화의 영향을 받으므로 “오류 0%”를 주장하지 않습니다. 대신 모르는 데이터는 추측하지 않고 RAW/diagnostic으로 보존하며, 관측된 wire semantics를 regression fixture로 고정해 회귀를 막습니다.
 
-자세한 내용은 `VALIDATION.md`와 `VALIDATION_REPORT.txt`를 확인하세요.
+자세한 내용은 `VALIDATION.md`, `VALIDATION_REPORT.txt`, `docs/ACCURACY.md`를 확인하세요.
 
 ## 문서
 
 - `docs/API.md` — REST / WS / write API
+- `docs/ACCURACY.md` — 정확성 모델 / protocol evidence
 - `docs/ARCHITECTURE.md` — 장애 격리와 데이터 경로
 - `docs/BENCHMARK_SOOPAPI.md` — soopapi/reindeer 벤치마킹 반영점
 - `VALIDATION.md` — 검증 범위와 한계

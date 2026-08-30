@@ -1,4 +1,4 @@
-# SOOP Unified Core v2.5.0 API
+# SOOP Unified Core v2.6.0 API
 
 Base URL: `http://localhost:8080`
 
@@ -87,6 +87,35 @@ Other actions: `list`, `ping`.
 
 동일 스트리머를 여러 API client가 구독해도 내부 Native SOOP WebSocket은 connection pool에서 공유됩니다. subscribe/unsubscribe 변경은 client별 queue로 직렬화됩니다.
 
+### Mission events — v2.6
+
+Opcode `121`은 단순한 "도전미션 코드"로 고정하지 않고 **mission envelope**로 처리합니다. 실제 관측된 JSON `type`에 따라 다음처럼 canonical event로 정규화됩니다.
+
+```text
+121 + type=CHALLENGE_GIFT -> type=CHALLENGE_MISSION_GIFTED
+                              category=donation
+                              donation.kind=challenge_mission
+
+121 + type=GIFT           -> type=BATTLE_MISSION_GIFTED
+                              category=donation
+                              donation.kind=battle_mission
+```
+
+후원자와 수량이 payload에 존재하면 `user.id`, `user.nickname`, `donation.amount`로 정규화합니다. `user_id/userId`, `user_nick/userNickname`, `gift_count/count` 변형을 허용하며 `chno`, `key`, `title`, relay/status/uuid와 파싱된 원본 mission object는 `payload`에 보존합니다.
+
+알 수 없는 121 subtype은 **후원으로 추측하지 않습니다.** 기존 `MISSION` / `notification` 의미를 유지하고 원본 데이터를 보존합니다. JSON 파싱 자체가 실패한 경우 `raw-only`로 낮춰 false-positive를 막습니다.
+
+기존 클라이언트 호환을 위해 specialized mission event도 다음 모든 필터에 매칭됩니다.
+
+```text
+MISSION
+CHALLENGE_MISSION_GIFTED / BATTLE_MISSION_GIFTED
+121
+donation
+```
+
+Opcode `125` settlement JSON은 보존하지만, 확인되지 않은 discriminator를 만들어 도전/대결 settlement로 추측 분류하지 않습니다.
+
 ## Connection pinning
 
 - `POST /v1/streams/{streamerId}` — subscriber가 없어도 연결 유지
@@ -155,7 +184,7 @@ GET /v1/auth/sessions
 ## Event support levels
 
 - `stable` — 일반적인 공개/익명 흐름에서도 의미와 필드가 비교적 검증됨
-- `conditional` — 인증/권한/방송 상태 등에 따라 가시성이 달라질 수 있음
+- `conditional` — 인증/권한/방송 상태 또는 관측된 wire subtype 등에 따라 가시성·세부 의미가 달라질 수 있음
 - `raw-only` — 의미를 과장하지 않고 연구용 RAW 신호로만 유지
 
 필터:
@@ -168,7 +197,7 @@ GET /v1/catalog/events?support=raw-only
 
 Code `52`는 블랙리스트 조회 API가 아니며 `UNCLASSIFIED_MODERATION_52` / `raw-only`로만 노출합니다.
 
-## v2.5 accuracy metadata
+## v2.5+ accuracy metadata
 
 `GET /v1/live/{id}` and `GET /v1/channel/{id}` expose field evidence under `consensus.fields`.
 
