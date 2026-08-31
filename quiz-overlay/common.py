@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 APP_NAME = "SOOP Quiz Overlay"
-APP_VERSION = "0.1.0-draft"
+APP_VERSION = "0.2.0"
 DEFAULT_PORT = 8765
 QUIZ_FILE = "quiz_sets.json"
 SETTINGS_FILE = "settings.json"
@@ -65,17 +65,17 @@ def safe_int(value: Any, default: int = 0) -> int:
 
 @dataclass
 class Question:
-    kind: str = "multiple"  # multiple|short|ox|number
+    kind: str = "multiple"
     prompt: str = ""
     choices: list[str] = field(default_factory=lambda: ["보기 1", "보기 2", "보기 3", "보기 4"])
     answer: str = "1"
     accepted_answers: list[str] = field(default_factory=list)
     duration_sec: int = 15
-    scoring_mode: str = "all"  # all|first_n|mixed
+    scoring_mode: str = "all"
     first_n: int = 3
     base_points: int = 100
     rank_points: list[int] = field(default_factory=lambda: [300, 200, 100])
-    answer_policy: str = "last"  # first|last
+    answer_policy: str = "last"
     auto_close_time: bool = True
     auto_close_quota: bool = False
     ignore_space: bool = True
