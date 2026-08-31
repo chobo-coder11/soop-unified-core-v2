@@ -27,8 +27,8 @@ class QuizAppV31(QuizAppV3):
                 ),
             )
             now = time.monotonic()
-            # Chat answers do not change the recovery payload until scoring is finalized.
-            # Avoid touching disk on every accepted answer/UI state version.
+            # Accepted answers do not alter the recovery payload until scoring is finalized.
+            # Avoid disk I/O on every chat/UI state version.
             if signature == self._recovery_signature and now - self._recovery_last_write < 8.0:
                 return
             self._path(SESSION_FILE).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -36,6 +36,15 @@ class QuizAppV31(QuizAppV3):
             self._recovery_last_write = now
         except Exception:
             pass
+
+    def _ui_tick(self) -> None:
+        super()._ui_tick()
+        # Only this single label changes during the countdown. The rest of the
+        # desktop console remains untouched until engine.state_version changes.
+        if self._active_page == "진행" and self.engine.state == "ANSWERING" and hasattr(self, "stage_label"):
+            remaining = self.engine.remaining_ms()
+            if remaining is not None:
+                self.stage_label.configure(text=f"답변 접수 중  ·  {remaining / 1000:.1f}초")
 
 
 def main() -> None:
