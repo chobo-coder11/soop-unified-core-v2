@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 APP_NAME = "SOOP Quiz Overlay"
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.4.0"
 DEFAULT_PORT = 8765
 QUIZ_FILE = "quiz_sets.json"
 SETTINGS_FILE = "settings.json"
