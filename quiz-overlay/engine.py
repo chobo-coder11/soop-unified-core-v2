@@ -71,7 +71,7 @@ class QuizEngine:
                 self.timer_deadline_monotonic = None
                 self.integrity_warning = "답변 접수 중 소켓 연결이 끊겨 문제를 안전하게 마감했습니다. 재진행을 권장합니다."
                 self.overlay_notice = "연결 문제로 답변 접수가 중단되었습니다"
-            elif self.state in {"READY", "RECRUITING"}:
+            elif self.state == "READY":
                 self.state = "DISCONNECTED"
             if reason:
                 self.log(f"연결 종료: {reason}")
@@ -199,7 +199,7 @@ class QuizEngine:
             elif q.scoring_mode == "first_n":
                 if i < q.first_n:
                     p.score += q.rank_points[i] if i < len(q.rank_points) else q.base_points
-            else:  # mixed
+            else:
                 p.score += q.base_points
                 if i < q.first_n:
                     p.score += q.rank_points[i] if i < len(q.rank_points) else 0
@@ -326,14 +326,7 @@ class QuizEngine:
             out = []
             for idx, p in enumerate(rows[:limit], start=1):
                 avg = int(p.total_correct_elapsed_ms / p.correct_elapsed_samples) if p.correct_elapsed_samples else None
-                out.append({
-                    "rank": idx,
-                    "display": p.display,
-                    "correct": p.correct_count,
-                    "score": p.score,
-                    "streak": p.best_streak,
-                    "avgMs": avg,
-                })
+                out.append({"rank": idx, "display": p.display, "correct": p.correct_count, "score": p.score, "streak": p.best_streak, "avgMs": avg})
             return out
 
     def remaining_ms(self) -> Optional[int]:
@@ -347,10 +340,7 @@ class QuizEngine:
             q = self.current_question
             answers = list(self.answers.values())
             correct = sorted((a for a in answers if a.correct), key=lambda a: a.seq)
-            first_correct = [
-                {"rank": i + 1, "display": f"{a.nickname}({a.user_id})", "elapsedMs": a.elapsed_ms}
-                for i, a in enumerate(correct[:10])
-            ]
+            first_correct = [{"rank": i + 1, "display": f"{a.nickname}({a.user_id})", "elapsedMs": a.elapsed_ms} for i, a in enumerate(correct[:10])]
             return {
                 "app": {"name": APP_NAME, "version": APP_VERSION},
                 "state": self.state,
@@ -396,13 +386,7 @@ class CoreSocketClient:
         backoff = 1.0
         while not self.stop_flag.is_set():
             try:
-                self.ws = websocket.WebSocketApp(
-                    self.url,
-                    on_open=self._on_open,
-                    on_message=self._on_message,
-                    on_error=self._on_error,
-                    on_close=self._on_close,
-                )
+                self.ws = websocket.WebSocketApp(self.url, on_open=self._on_open, on_message=self._on_message, on_error=self._on_error, on_close=self._on_close)
                 self.ws.run_forever(ping_interval=20, ping_timeout=10)
             except Exception as e:
                 self._emit(f"소켓 오류: {e}")
