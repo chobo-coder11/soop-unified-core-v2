@@ -1,0 +1,74 @@
+name: Build SOOP Quiz Overlay EXE
+
+on:
+  push:
+    branches:
+      - feature/quiz-overlay-draft
+    paths:
+      - '.github/workflows/build-quiz-overlay-exe.yml'
+      - 'quiz-overlay/payload/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rehydrate source archive
+        shell: pwsh
+        run: |
+          $parts = Get-ChildItem 'quiz-overlay/payload/source_*.b64' | Sort-Object Name
+          if ($parts.Count -ne 5) { throw "Expected 5 source payload parts, found $($parts.Count)" }
+          $b64 = ($parts | ForEach-Object { (Get-Content $_.FullName -Raw).Trim() }) -join ''
+          [IO.File]::WriteAllBytes('quiz-overlay/source.zip', [Convert]::FromBase64String($b64))
+          $hash = (Get-FileHash 'quiz-overlay/source.zip' -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Host "Source SHA256: $hash"
+          if ($hash -ne 'd48faf53c1e20c540e22338aa541e377180e32ba2c41c4e9d07c7802f7bd9c04') {
+            throw "Source payload checksum mismatch"
+          }
+          New-Item -ItemType Directory -Force 'quiz-overlay/src' | Out-Null
+          Expand-Archive -Path 'quiz-overlay/source.zip' -DestinationPath 'quiz-overlay/src' -Force
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: 'quiz-overlay/src/requirements.txt'
+
+      - name: Install dependencies
+        working-directory: quiz-overlay/src
+        run: python -m pip install -r requirements.txt
+
+      - name: Compile and unit test
+        working-directory: quiz-overlay/src
+        run: |
+          python -m py_compile app.py engine.py
+          python -m unittest -v test_engine.py
+
+      - name: Build Windows EXE
+        working-directory: quiz-overlay/src
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name SOOP-Quiz-Overlay app.py
+
+      - name: Prepare release folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force 'quiz-overlay/release' | Out-Null
+          Copy-Item 'quiz-overlay/src/dist/SOOP-Quiz-Overlay.exe' 'quiz-overlay/release/SOOP-Quiz-Overlay.exe'
+          Copy-Item 'quiz-overlay/src/README.md' 'quiz-overlay/release/README.md'
+          Copy-Item 'quiz-overlay/src/sample.quiz.json' 'quiz-overlay/release/sample.quiz.json'
+          Get-FileHash 'quiz-overlay/release/SOOP-Quiz-Overlay.exe' -Algorithm SHA256 | Format-List | Out-File 'quiz-overlay/release/SHA256.txt'
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: SOOP-Quiz-Overlay-Windows
+          path: quiz-overlay/release/*
+          if-no-files-found: error
+          retention-days: 14
