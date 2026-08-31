@@ -10,10 +10,11 @@ from pathlib import Path
 from typing import Any, Optional
 
 APP_NAME = "SOOP Quiz Overlay"
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.3.0"
 DEFAULT_PORT = 8765
 QUIZ_FILE = "quiz_sets.json"
 SETTINGS_FILE = "settings.json"
+SESSION_FILE = "session_recovery.json"
 
 
 def utc_now() -> datetime:
