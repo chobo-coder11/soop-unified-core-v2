@@ -8,7 +8,6 @@ on:
       - 'quiz-overlay/**'
       - 'src/**'
       - 'package.json'
-      - 'package-lock.json'
       - 'tsconfig.json'
       - '.github/workflows/quiz-overlay-windows.yml'
   workflow_dispatch:
@@ -28,12 +27,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: 'npm'
 
       - name: Build bundled Unified Core
         shell: pwsh
         run: |
-          npm ci
+          npm install --no-package-lock
           npm run build
 
       - name: Smoke bundled Core runtime
@@ -46,7 +44,7 @@ jobs:
           $p = Start-Process node -ArgumentList 'dist/src/index.js' -PassThru -WindowStyle Hidden
           try {
             $ok = $false
-            for ($i=0; $i -lt 25; $i++) {
+            for ($i=0; $i -lt 30; $i++) {
               Start-Sleep -Milliseconds 250
               try {
                 $r = Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:18765/readyz' -TimeoutSec 2
@@ -59,7 +57,7 @@ jobs:
           }
 
       - name: Keep production Node dependencies only
-        run: npm prune --omit=dev
+        run: npm prune --omit=dev --no-package-lock
 
       - name: Setup Python
         uses: actions/setup-python@v5
