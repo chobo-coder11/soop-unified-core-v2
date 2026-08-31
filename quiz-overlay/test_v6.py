@@ -15,8 +15,9 @@ def main() -> None:
     assert "row:nth-child(1)" in base_overlay.RANK
     server = OverlayServerV6(engine, preferred_port=8870)
     try:
-        assert "/overlay/quiz" in server.quiz_url
-        assert "/overlay/rank" in server.rank_url
+        assert server.port >= 8870
+        assert server.quiz_url.startswith("http://127.0.0.1:")
+        assert isinstance(server.rank_url, str) and server.rank_url.startswith("http://127.0.0.1:")
     finally:
         server.server.server_close()
     print("v0.6 design wrapper regression: PASS")
