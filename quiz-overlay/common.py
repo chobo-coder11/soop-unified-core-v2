@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 APP_NAME = "SOOP Quiz Overlay"
-APP_VERSION = "0.4.0"
+APP_VERSION = "0.5.0"
 DEFAULT_PORT = 8765
 QUIZ_FILE = "quiz_sets.json"
 SETTINGS_FILE = "settings.json"
@@ -83,6 +83,13 @@ class Question:
     ignore_punct: bool = True
     ignore_case: bool = True
     number_tolerance: float = 0.0
+    number_mode: str = "exact"              # exact | closest
+    closest_count: int = 3
+    score_multiplier: float = 1.0
+    elimination_mode: str = "none"          # none | wrong | first_n
+    allow_eliminated_answers: bool = False
+    shuffle_choices: bool = False
+    note: str = ""
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Question":
@@ -92,11 +99,16 @@ class Question:
                 setattr(q, k, d[k])
         q.duration_sec = max(1, min(3600, safe_int(q.duration_sec, 15)))
         q.first_n = max(1, min(1000, safe_int(q.first_n, 3)))
+        q.closest_count = max(1, min(1000, safe_int(q.closest_count, 3)))
         q.base_points = safe_int(q.base_points, 100)
+        q.score_multiplier = max(0.0, min(100.0, safe_float(q.score_multiplier, 1.0)))
         q.number_tolerance = max(0.0, safe_float(q.number_tolerance, 0.0))
+        q.number_mode = str(q.number_mode or "exact") if str(q.number_mode or "exact") in {"exact", "closest"} else "exact"
+        q.elimination_mode = str(q.elimination_mode or "none") if str(q.elimination_mode or "none") in {"none", "wrong", "first_n"} else "none"
         q.choices = [str(x) for x in (q.choices or [])][:6]
         q.accepted_answers = [str(x) for x in (q.accepted_answers or [])][:50]
         q.rank_points = [safe_int(x, 0) for x in (q.rank_points or [])][:1000]
+        q.note = str(q.note or "")[:500]
         return q
 
 
@@ -111,6 +123,11 @@ class Participant:
     best_streak: int = 0
     total_correct_elapsed_ms: int = 0
     correct_elapsed_samples: int = 0
+    eliminated: bool = False
+    eliminated_round: int = 0
+    first_place_count: int = 0
+    top3_count: int = 0
+    last_answer_round: int = 0
 
     @property
     def display(self) -> str:
