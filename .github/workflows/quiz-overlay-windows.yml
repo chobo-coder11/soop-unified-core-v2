@@ -6,6 +6,10 @@ on:
       - feature/quiz-overlay-draft
     paths:
       - 'quiz-overlay/**'
+      - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
       - '.github/workflows/quiz-overlay-windows.yml'
   workflow_dispatch:
 
@@ -15,10 +19,47 @@ permissions:
 jobs:
   build-windows:
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Build bundled Unified Core
+        shell: pwsh
+        run: |
+          npm ci
+          npm run build
+
+      - name: Smoke bundled Core runtime
+        shell: pwsh
+        run: |
+          $env:HOST='127.0.0.1'
+          $env:PORT='18765'
+          $env:SOOP_ENABLE_JAVA_SIDECAR='false'
+          $env:SOOP_ENABLE_WRITE_API='false'
+          $p = Start-Process node -ArgumentList 'dist/src/index.js' -PassThru -WindowStyle Hidden
+          try {
+            $ok = $false
+            for ($i=0; $i -lt 25; $i++) {
+              Start-Sleep -Milliseconds 250
+              try {
+                $r = Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:18765/readyz' -TimeoutSec 2
+                if ($r.StatusCode -eq 200) { $ok = $true; break }
+              } catch {}
+            }
+            if (-not $ok) { throw 'Bundled Core readiness smoke failed' }
+          } finally {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Keep production Node dependencies only
+        run: npm prune --omit=dev
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -27,22 +68,32 @@ jobs:
           cache: 'pip'
           cache-dependency-path: quiz-overlay/requirements.txt
 
-      - name: Install dependencies
+      - name: Install Python build dependencies
         run: python -m pip install --upgrade pip && python -m pip install -r quiz-overlay/requirements.txt pyinstaller==6.15.0
 
       - name: Compile check
-        run: python -m py_compile quiz-overlay/common.py quiz-overlay/engine.py quiz-overlay/overlays.py quiz-overlay/ui_run.py quiz-overlay/ui_edit.py quiz-overlay/app.py
+        run: python -m py_compile quiz-overlay/common.py quiz-overlay/quiz_engine.py quiz-overlay/core_runtime.py quiz-overlay/soop_client.py quiz-overlay/overlay_server_v2.py quiz-overlay/app_v2.py quiz-overlay/build_v2.py
 
-      - name: Engine regression tests
+      - name: Accuracy regression tests
         run: python quiz-overlay/test_engine.py
 
-      - name: Build EXE
-        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name SOOP-Quiz-Overlay --distpath quiz-overlay/dist --workpath quiz-overlay/build --specpath quiz-overlay quiz-overlay/app.py
+      - name: Build all-in-one EXE
+        run: python quiz-overlay/build_v2.py
+
+      - name: Validate EXE
+        shell: pwsh
+        run: |
+          $exe = 'quiz-overlay/dist/SOOP-Quiz-Overlay.exe'
+          if (-not (Test-Path $exe)) { throw 'EXE missing' }
+          $file = Get-Item $exe
+          if ($file.Length -lt 10000000) { throw 'EXE unexpectedly small' }
+          Get-FileHash $exe -Algorithm SHA256 | Format-List
+          Write-Host ('EXE size: {0:N1} MiB' -f ($file.Length / 1MB))
 
       - name: Upload Windows EXE
         uses: actions/upload-artifact@v4
         with:
-          name: SOOP-Quiz-Overlay-Windows
+          name: SOOP-Quiz-Overlay-Windows-AllInOne
           path: quiz-overlay/dist/SOOP-Quiz-Overlay.exe
           if-no-files-found: error
           retention-days: 14
