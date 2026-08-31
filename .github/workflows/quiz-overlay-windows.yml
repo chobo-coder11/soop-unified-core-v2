@@ -78,6 +78,48 @@ jobs:
       - name: Build all-in-one EXE
         run: python quiz-overlay/build_v2.py
 
+      - name: End-user EXE smoke test
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path 'quiz-overlay/dist/SOOP-Quiz-Overlay.exe'
+          $p = Start-Process $exe -PassThru
+          try {
+            $overlayOk = $false
+            $coreOk = $false
+            for ($i=0; $i -lt 80; $i++) {
+              Start-Sleep -Milliseconds 500
+              if ($p.HasExited) { throw "Packaged EXE exited early with code $($p.ExitCode)" }
+              if (-not $overlayOk) {
+                try {
+                  $state = Invoke-RestMethod 'http://127.0.0.1:8765/api/state' -TimeoutSec 2
+                  if ($state.app.name -eq 'SOOP Quiz Overlay') { $overlayOk = $true }
+                } catch {}
+              }
+              if (-not $coreOk) {
+                try {
+                  $ready = Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:18765/readyz' -TimeoutSec 2
+                  if ($ready.StatusCode -eq 200) { $coreOk = $true }
+                } catch {}
+              }
+              if ($overlayOk -and $coreOk) { break }
+            }
+            if (-not $overlayOk) { throw 'Packaged EXE overlay server did not become ready' }
+            if (-not $coreOk) { throw 'Packaged EXE embedded Unified Core did not become ready' }
+            Write-Host 'Packaged EXE smoke: UI process + overlay server + embedded Core OK'
+          } finally {
+            try {
+              if (-not $p.HasExited) {
+                [void]$p.CloseMainWindow()
+                Start-Sleep -Seconds 2
+              }
+              if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+            } catch {}
+            Start-Sleep -Seconds 1
+            Get-NetTCPConnection -LocalPort 18765 -State Listen -ErrorAction SilentlyContinue | ForEach-Object {
+              Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+            }
+          }
+
       - name: Validate EXE
         shell: pwsh
         run: |
