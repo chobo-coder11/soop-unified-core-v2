@@ -1,0 +1,48 @@
+name: Build SOOP Quiz Overlay EXE
+
+on:
+  push:
+    branches:
+      - feature/quiz-overlay-draft
+    paths:
+      - 'quiz-overlay/**'
+      - '.github/workflows/quiz-overlay-windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: quiz-overlay/requirements.txt
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r quiz-overlay/requirements.txt pyinstaller==6.15.0
+
+      - name: Compile check
+        run: python -m py_compile quiz-overlay/common.py quiz-overlay/engine.py quiz-overlay/overlays.py quiz-overlay/ui_run.py quiz-overlay/ui_edit.py quiz-overlay/app.py
+
+      - name: Engine regression tests
+        run: python quiz-overlay/test_engine.py
+
+      - name: Build EXE
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name SOOP-Quiz-Overlay --distpath quiz-overlay/dist --workpath quiz-overlay/build --specpath quiz-overlay quiz-overlay/app.py
+
+      - name: Upload Windows EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: SOOP-Quiz-Overlay-Windows
+          path: quiz-overlay/dist/SOOP-Quiz-Overlay.exe
+          if-no-files-found: error
+          retention-days: 14
