@@ -20,6 +20,17 @@ def add(source: Path | str, dest: str) -> str:
     return f"{source}{os.pathsep}{dest}"
 
 
+def prepare_release_entry() -> Path:
+    source = HERE / "app_v2.py"
+    target = HERE / "app_release.py"
+    text = source.read_text(encoding="utf-8")
+    # CustomTkinter accepts theme color tuples, not mutable lists. Keep the
+    # source readable while guaranteeing a strict release representation.
+    text = text.replace('fg_color=["#3B8ED0", "#1F6AA5"]', 'fg_color=("#3B8ED0", "#1F6AA5")')
+    target.write_text(text, encoding="utf-8")
+    return target
+
+
 def main() -> None:
     if sys.platform != "win32":
         raise SystemExit("This packaging script must run on Windows.")
@@ -31,8 +42,9 @@ def main() -> None:
     if missing:
         raise SystemExit("Missing build inputs: " + ", ".join(missing))
 
+    entry = prepare_release_entry()
     args = [
-        str(HERE / "app_v2.py"),
+        str(entry),
         "--noconfirm",
         "--clean",
         "--onefile",
