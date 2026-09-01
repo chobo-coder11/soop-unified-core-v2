@@ -36,10 +36,10 @@ def main() -> None:
         assert '__INITIAL_STATE_JSON__' not in html
         assert 'const INITIAL={' in html
         assert '"state":"QUESTION_SHOWN"' in html
-        assert '최종 문제 공개 HTML 검증' in html or '\ucd5c\uc885 \ubb38\uc81c' in html
         assert 'NEVER-LEAK-ALIAS' not in html
         assert 'NEVER-LEAK-NOTE' not in html
-        # The answer field itself must not exist in the bootstrapped question.
+        # Parse the actual bootstrap object instead of depending on whether
+        # ensure_ascii encoded Korean text as literal characters or \u escapes.
         m = re.search(r'const INITIAL=(\{.*?\});let S=', html, re.S)
         assert m, 'bootstrapped INITIAL JSON missing'
         initial = json.loads(m.group(1))
@@ -65,7 +65,9 @@ def main() -> None:
         server.stop()
     assert '연결 중' in FINAL_QUIZ
     assert 'apply(INITIAL)' in FINAL_QUIZ
-    print('v0.9 final bootstrap HTML/privacy regression: PASS')
+    assert 'function topBar(s)' in FINAL_QUIZ
+    assert 'function top(s)' not in FINAL_QUIZ
+    print('v0.9 final bootstrap HTML/privacy/JS regression: PASS')
 
 
 if __name__ == '__main__':
