@@ -30,7 +30,7 @@ def main() -> None:
         HERE / "app_v9_release.py", HERE / "app_v9.py", HERE / "app_v8.py", HERE / "app_v7.py", HERE / "app_v6.py", HERE / "app_v5.py", HERE / "app_v4.py", HERE / "app_v31.py", HERE / "app_v3.py",
         HERE / "quiz_engine_v9.py", HERE / "quiz_engine_v8.py", HERE / "quiz_engine_v7.py", HERE / "quiz_engine_v6.py", HERE / "quiz_engine_v5.py", HERE / "quiz_engine_v4.py", HERE / "quiz_engine_v3.py",
         HERE / "soop_client_v5.py", HERE / "soop_client_v4.py", HERE / "soop_client_v3.py",
-        HERE / "overlay_server_v9_release.py", HERE / "overlay_server_v9.py", HERE / "overlay_server_v8.py", HERE / "overlay_server_v7.py", HERE / "overlay_server_v6.py", HERE / "overlay_server_v5.py",
+        HERE / "overlay_server_v9_final.py", HERE / "overlay_server_v9_release.py", HERE / "overlay_server_v9.py", HERE / "overlay_server_v8.py", HERE / "overlay_server_v7.py", HERE / "overlay_server_v6.py", HERE / "overlay_server_v5.py",
         HERE / "core_runtime.py", HERE / "common.py",
     ]
     missing = [str(p) for p in required if not p.exists()]
@@ -42,7 +42,7 @@ def main() -> None:
         "--name=SOOP-Quiz-Studio-v0.9.0",
         f"--distpath={HERE / 'dist-v9'}", f"--workpath={HERE / 'build-v9'}", f"--specpath={HERE}", f"--paths={HERE}",
         "--collect-all=customtkinter", "--hidden-import=websocket", "--hidden-import=customtkinter",
-        "--hidden-import=overlay_server_v9_release", "--hidden-import=overlay_server_v9",
+        "--hidden-import=overlay_server_v9_final", "--hidden-import=overlay_server_v9_release", "--hidden-import=overlay_server_v9",
         "--hidden-import=quiz_engine_v9", "--hidden-import=quiz_engine_v8", "--hidden-import=quiz_engine_v7", "--hidden-import=quiz_engine_v6", "--hidden-import=quiz_engine_v5",
         "--hidden-import=soop_client_v5", "--hidden-import=overlay_server_v8", "--hidden-import=overlay_server_v7", "--hidden-import=overlay_server_v6", "--hidden-import=overlay_server_v5",
         "--add-binary=" + add(node_path, "runtime-core"),
