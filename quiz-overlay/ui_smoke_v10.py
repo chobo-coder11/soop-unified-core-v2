@@ -1,11 +1,24 @@
 from __future__ import annotations
 
+import os
+import threading
+import traceback
+
 from app_v10 import QuizAppV10
 
 
+def _hard_timeout() -> None:
+    print("v0.10 desktop editor smoke timed out", flush=True)
+    os._exit(124)
+
+
 def main() -> None:
-    app = QuizAppV10()
+    timer = threading.Timer(30.0, _hard_timeout)
+    timer.daemon = True
+    timer.start()
+    app = None
     try:
+        app = QuizAppV10()
         app.update_idletasks()
         app.show_page("문제")
         app.update_idletasks()
@@ -36,9 +49,24 @@ def main() -> None:
         assert app.quiz_sets[app.active_set_name][1].kind == "short"
         assert app.quiz_sets[app.active_set_name][1].answer == "서울"
 
-        print("v0.10 desktop editor interaction smoke passed")
-    finally:
-        app.on_close()
+        print("v0.10 desktop editor interaction smoke passed", flush=True)
+        # Do not let a background Tk/HTTP/runtime cleanup edge case turn a
+        # successful interaction regression into an indefinite CI process.
+        try:
+            app.destroy()
+        except Exception:
+            pass
+        timer.cancel()
+        os._exit(0)
+    except BaseException:
+        traceback.print_exc()
+        try:
+            if app is not None:
+                app.destroy()
+        except Exception:
+            pass
+        timer.cancel()
+        os._exit(1)
 
 
 if __name__ == "__main__":
