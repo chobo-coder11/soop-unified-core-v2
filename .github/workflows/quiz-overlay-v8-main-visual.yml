@@ -1,0 +1,115 @@
+name: Visual QA SOOP Quiz Studio v0.8 Main Window
+
+on:
+  push:
+    branches: [feature/quiz-overlay-draft]
+    paths:
+      - '.github/workflows/quiz-overlay-v8-main-visual.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  visual-qa-v8:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Build Unified Core
+        shell: pwsh
+        run: |
+          npm install --no-package-lock
+          npm run build
+          npm prune --omit=dev --no-package-lock
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install packaging and screenshot dependencies
+        run: python -m pip install -r quiz-overlay/requirements.txt pyinstaller==6.15.0 pillow
+
+      - name: Build v0.8 EXE
+        run: python quiz-overlay/build_v8.py
+
+      - name: Launch and capture unobstructed app window
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path 'quiz-overlay/dist-v8/SOOP-Quiz-Studio-v0.8.0.exe'
+          $p = Start-Process $exe -PassThru
+          try {
+            $ok=$false
+            for ($i=0; $i -lt 100; $i++) {
+              Start-Sleep -Milliseconds 400
+              if ($p.HasExited) { throw "EXE exited early: $($p.ExitCode)" }
+              try { $s=Invoke-RestMethod 'http://127.0.0.1:8765/api/state' -TimeoutSec 2; if ($s.app.version -eq '0.8.0') { $ok=$true; break } } catch {}
+            }
+            if (-not $ok) { throw 'App readiness failed' }
+
+            Add-Type @'
+            using System;
+            using System.Runtime.InteropServices;
+            public static class Win32Close {
+              [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+              [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+            }
+            '@
+            $dlg = [Win32Close]::FindWindow($null, 'SOOP Quiz Studio 시작하기')
+            if ($dlg -ne [IntPtr]::Zero) { [void][Win32Close]::PostMessage($dlg, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) }
+            Start-Sleep -Seconds 2
+
+            @'
+            import ctypes
+            import time
+            from PIL import ImageGrab
+
+            user32 = ctypes.windll.user32
+            found = []
+            CALLBACK = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+            @CALLBACK
+            def enum_cb(hwnd, _):
+                if not user32.IsWindowVisible(hwnd):
+                    return True
+                n = user32.GetWindowTextLengthW(hwnd)
+                if n:
+                    buf = ctypes.create_unicode_buffer(n + 1)
+                    user32.GetWindowTextW(hwnd, buf, n + 1)
+                    title = buf.value
+                    if 'SOOP Quiz Studio' in title and '시작하기' not in title:
+                        found.append((hwnd, title))
+                return True
+
+            user32.EnumWindows(enum_cb, 0)
+            if not found:
+                raise SystemExit('Main app window not found')
+            hwnd, title = found[0]
+            try:
+                image = ImageGrab.grab(window=hwnd)
+            except TypeError:
+                rect = (ctypes.c_long * 4)()
+                user32.GetWindowRect(hwnd, ctypes.byref(rect))
+                image = ImageGrab.grab(tuple(rect), all_screens=True)
+            image.save(r'quiz-overlay/v8-main-window.png')
+            print(title, image.size)
+            '@ | Set-Content -Encoding UTF8 quiz-overlay/capture_v8.py
+            python quiz-overlay/capture_v8.py
+            if (-not (Test-Path 'quiz-overlay/v8-main-window.png')) { throw 'Main UI capture failed' }
+          } finally {
+            try { if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } } catch {}
+            Get-NetTCPConnection -LocalPort 18765 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
+          }
+
+      - name: Upload main-window visual QA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SOOP-Quiz-Studio-v0.8.0-Main-Visual-QA
+          path: quiz-overlay/v8-main-window.png
+          if-no-files-found: error
+          retention-days: 14
