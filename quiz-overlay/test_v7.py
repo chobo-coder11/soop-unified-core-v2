@@ -31,7 +31,7 @@ def main() -> None:
     server = OverlayServerV7(engine, preferred_port=8871)
     try:
         assert "/overlay/quiz" in server.quiz_url
-        assert "/overlay/rank" in server.rank_url
+        assert "/overlay/top10" in server.rank_url
     finally:
         server.server.server_close()
     print("v0.7 broadcast UX regression: PASS")
