@@ -1,0 +1,41 @@
+name: Probe SOOP Quiz v0.9 Layer Selenium
+
+on:
+  push:
+    branches: [feature/quiz-overlay-draft]
+    paths:
+      - 'quiz-overlay/browser_qa_v9.py'
+      - 'quiz-overlay/overlay_server_v9*.py'
+      - 'quiz-overlay/overlay_fixture_v9*.py'
+      - '.github/workflows/quiz-overlay-v9-selenium-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install selenium
+      - name: Probe QUESTION_SHOWN 1280x720
+        shell: pwsh
+        run: |
+          $fixture=Start-Process python -ArgumentList @('quiz-overlay/overlay_fixture_v9_release.py','QUESTION_SHOWN','8898') -PassThru -WindowStyle Hidden
+          try {
+            for($i=0;$i -lt 40;$i++){Start-Sleep -Milliseconds 200;try{if((Invoke-RestMethod 'http://127.0.0.1:8898/api/health').version -eq '0.9.0'){break}}catch{}}
+            python quiz-overlay/browser_qa_v9.py 'http://127.0.0.1:8898/overlay/quiz' 'QUESTION_SHOWN' 1280 720 'quiz-overlay/v9-selenium-question-1280x720.png'
+          } finally { try{if(-not $fixture.HasExited){Stop-Process -Id $fixture.Id -Force}}catch{} }
+      - name: Upload probe screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SOOP-Quiz-v0.9-Selenium-Probe
+          path: quiz-overlay/v9-selenium-question-1280x720.png
+          if-no-files-found: warn
+          retention-days: 3
