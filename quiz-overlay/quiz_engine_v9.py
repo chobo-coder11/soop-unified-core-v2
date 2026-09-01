@@ -18,6 +18,7 @@ class QuizEngineV9(QuizEngineV8):
     Important separation:
     - the desktop controller keeps the full question and scoring data;
     - browser overlays only receive display-safe fields;
+    - the next question is not sent to browser overlays before QUESTION_SHOWN;
     - answer/correctness data is published only after ANSWER_REVEALED.
     """
 
@@ -125,6 +126,8 @@ class QuizEngineV9(QuizEngineV8):
         return ok
 
     def _public_question(self) -> dict[str, Any] | None:
+        if self.state not in {"QUESTION_SHOWN", "ANSWERING", "QUESTION_CLOSED", "ANSWER_REVEALED"}:
+            return None
         q = self.current_question
         if not q:
             return None
@@ -196,7 +199,7 @@ class QuizEngineV9(QuizEngineV8):
                 "firstCorrect": first_correct,
                 "rankingMode": str(self.ranking_mode),
                 "ranking": self.ranking(10),
-                "answerHint": self.answer_hint(),
+                "answerHint": self.answer_hint() if q_public else "",
                 "visual": dict(self.visual),
                 "allowMidJoin": bool(self.allow_mid_join),
                 "survivors": survivors,
