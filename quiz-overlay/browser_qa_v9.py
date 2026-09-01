@@ -6,8 +6,50 @@ import time
 from pathlib import Path
 
 from selenium import webdriver
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
+
+
+def _dump_failure(driver, screenshot: str, expected: str) -> None:
+    try:
+        metrics = driver.execute_script(
+            """
+            return {
+              url: location.href,
+              readyState: document.readyState,
+              scene: document.body ? (document.body.dataset.scene || '') : '',
+              overflow: document.body ? (document.body.dataset.overflow || '') : '',
+              answerVisible: document.body ? (document.body.dataset.answerVisible || '') : '',
+              bodyText: document.body ? document.body.innerText.slice(0,1000) : '',
+              contentHTML: document.getElementById('content') ? document.getElementById('content').innerHTML.slice(0,2000) : '',
+              scriptCount: document.scripts.length,
+              initialType: typeof INITIAL,
+              hasApply: typeof apply === 'function',
+              hasEvents: typeof events === 'function'
+            };
+            """
+        )
+        print("BROWSER_TIMEOUT=" + json.dumps(metrics, ensure_ascii=False))
+    except Exception as exc:
+        print("BROWSER_TIMEOUT_METRICS_ERROR=" + repr(exc))
+    try:
+        for row in driver.get_log("browser"):
+            print("BROWSER_CONSOLE=" + json.dumps(row, ensure_ascii=False))
+    except Exception as exc:
+        print("BROWSER_LOG_ERROR=" + repr(exc))
+    try:
+        Path(screenshot).parent.mkdir(parents=True, exist_ok=True)
+        driver.save_screenshot(screenshot)
+        print("BROWSER_TIMEOUT_SCREENSHOT=" + screenshot)
+    except Exception as exc:
+        print("BROWSER_SCREENSHOT_ERROR=" + repr(exc))
+    try:
+        src = driver.page_source
+        print("BROWSER_SOURCE_HEAD=" + src[:3000].replace("\n", "\\n"))
+    except Exception as exc:
+        print("BROWSER_SOURCE_ERROR=" + repr(exc))
+    print("BROWSER_EXPECTED_SCENE=" + expected)
 
 
 def main() -> None:
@@ -26,14 +68,19 @@ def main() -> None:
     options.add_argument("--no-first-run")
     options.add_argument("--disable-background-networking")
     options.add_argument("--window-size=%d,%d" % (args.width, args.height))
+    options.set_capability("goog:loggingPrefs", {"browser": "ALL"})
 
     driver = webdriver.Chrome(options=options)
     try:
         driver.set_window_size(args.width, args.height)
         driver.get(args.url)
-        WebDriverWait(driver, 8.0, poll_frequency=0.08).until(
-            lambda d: d.execute_script("return document.body && document.body.dataset.scene") == args.state
-        )
+        try:
+            WebDriverWait(driver, 8.0, poll_frequency=0.08).until(
+                lambda d: d.execute_script("return document.body && document.body.dataset.scene") == args.state
+            )
+        except TimeoutException:
+            _dump_failure(driver, args.screenshot, args.state)
+            raise
         time.sleep(0.25)  # allow two RAF fit passes / font layout to settle
         metrics = driver.execute_script(
             """
