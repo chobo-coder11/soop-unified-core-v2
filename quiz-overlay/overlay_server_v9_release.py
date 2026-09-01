@@ -10,6 +10,10 @@ import overlay_server_v9 as _base
 
 _original = _base.QUIZ
 _fixed = _original
+# `top` is a browser-provided global (window.top). Declaring `function top(...)`
+# as a top-level lexical/function binding can make Chromium reject the entire
+# inline script. Rename both the helper definition and all direct calls.
+_fixed = _fixed.replace('top(s)', 'topBar(s)')
 _fixed = _fixed.replace(
     '.shell{width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:clamp(8px,1.8vh,20px) clamp(10px,2vw,36px)}',
     '.shell{width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:8px 10px}',
@@ -21,8 +25,10 @@ _fixed = _fixed.replace(
 
 if _fixed == _original:
     raise RuntimeError('v0.9 release overlay patch did not match expected source')
-if 'data' not in _fixed or 'dataset.answerVisible' not in _fixed:
-    raise RuntimeError('v0.9 release overlay patch incomplete')
+if 'function topBar(s)' not in _fixed or 'function top(s)' in _fixed:
+    raise RuntimeError('v0.9 release overlay top-global collision patch incomplete')
+if 'dataset.answerVisible' not in _fixed:
+    raise RuntimeError('v0.9 release overlay viewport patch incomplete')
 
 _base.QUIZ = _fixed
 QUIZ = _fixed
