@@ -1,0 +1,224 @@
+name: Build SOOP Quiz Studio v0.9 Release EXE
+
+on:
+  push:
+    branches: [feature/quiz-overlay-draft]
+    paths:
+      - 'quiz-overlay/**'
+      - 'src/**'
+      - 'package.json'
+      - 'tsconfig.json'
+      - '.github/workflows/quiz-overlay-v9-release-windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-v9-release:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Build bundled Unified Core
+        shell: pwsh
+        run: |
+          npm install --no-package-lock
+          npm run build
+          npm prune --omit=dev --no-package-lock
+
+      - name: Smoke Core HTTP and WebSocket v4 heartbeat
+        shell: pwsh
+        run: |
+          $env:HOST='127.0.0.1'
+          $env:PORT='18765'
+          $env:SOOP_ENABLE_JAVA_SIDECAR='false'
+          $env:SOOP_ENABLE_WRITE_API='false'
+          $p = Start-Process node -ArgumentList 'dist/src/index.js' -PassThru -WindowStyle Hidden
+          try {
+            $ok = $false
+            for ($i=0; $i -lt 40; $i++) {
+              Start-Sleep -Milliseconds 250
+              try { if ((Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:18765/readyz' -TimeoutSec 2).StatusCode -eq 200) { $ok=$true; break } } catch {}
+            }
+            if (-not $ok) { throw 'Core readiness failed' }
+            $ws = [System.Net.WebSockets.ClientWebSocket]::new()
+            $ct = [Threading.CancellationToken]::None
+            $ws.ConnectAsync([Uri]'ws://127.0.0.1:18765/v1/ws',$ct).GetAwaiter().GetResult()
+            $buf = New-Object byte[] 8192
+            $r = $ws.ReceiveAsync([ArraySegment[byte]]::new($buf),$ct).GetAwaiter().GetResult()
+            $hello = [Text.Encoding]::UTF8.GetString($buf,0,$r.Count) | ConvertFrom-Json
+            if ($hello.type -ne 'hello' -or $hello.protocol -ne 4) { throw 'WebSocket protocol 4 hello failed' }
+            $ws.Dispose()
+          } finally {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: quiz-overlay/requirements.txt
+
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r quiz-overlay/requirements.txt pyinstaller==6.15.0 pillow
+
+      - name: Compile release code
+        run: >-
+          python -m py_compile
+          quiz-overlay/common.py
+          quiz-overlay/core_runtime.py
+          quiz-overlay/quiz_engine_v3.py
+          quiz-overlay/quiz_engine_v4.py
+          quiz-overlay/quiz_engine_v5.py
+          quiz-overlay/quiz_engine_v6.py
+          quiz-overlay/quiz_engine_v7.py
+          quiz-overlay/quiz_engine_v8.py
+          quiz-overlay/quiz_engine_v9.py
+          quiz-overlay/soop_client_v3.py
+          quiz-overlay/soop_client_v4.py
+          quiz-overlay/soop_client_v5.py
+          quiz-overlay/overlay_server_v5.py
+          quiz-overlay/overlay_server_v6.py
+          quiz-overlay/overlay_server_v7.py
+          quiz-overlay/overlay_server_v8.py
+          quiz-overlay/overlay_server_v9.py
+          quiz-overlay/overlay_server_v9_release.py
+          quiz-overlay/app_v3.py
+          quiz-overlay/app_v31.py
+          quiz-overlay/app_v4.py
+          quiz-overlay/app_v5.py
+          quiz-overlay/app_v6.py
+          quiz-overlay/app_v7.py
+          quiz-overlay/app_v8.py
+          quiz-overlay/app_v9.py
+          quiz-overlay/app_v9_release.py
+          quiz-overlay/overlay_fixture_v9.py
+          quiz-overlay/overlay_fixture_v9_release.py
+          quiz-overlay/test_v9.py
+          quiz-overlay/test_v9_release.py
+          quiz-overlay/build_v9_release.py
+
+      - name: Full engine, load, reveal, SSE and viewport regressions
+        run: |
+          python quiz-overlay/test_engine.py
+          python quiz-overlay/test_v3.py
+          python quiz-overlay/test_v4.py
+          python quiz-overlay/test_v5.py
+          python quiz-overlay/test_v6.py
+          python quiz-overlay/test_v7.py
+          python quiz-overlay/test_v8.py
+          python quiz-overlay/test_v9_release.py
+
+      - name: Real Chromium render QA at 720p and 1080p
+        shell: pwsh
+        run: |
+          $candidates = @(
+            'C:\Program Files\Google\Chrome\Application\chrome.exe',
+            'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
+            'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe',
+            'C:\Program Files\Microsoft\Edge\Application\msedge.exe'
+          )
+          $browser = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $browser) { throw 'Chromium browser not found on runner' }
+          Write-Host "Visual QA browser: $browser"
+
+          function Test-LayerState([string]$state, [int]$port, [int]$width, [int]$height) {
+            $fixture = Start-Process python -ArgumentList @('quiz-overlay/overlay_fixture_v9_release.py', $state, $port) -PassThru -WindowStyle Hidden
+            try {
+              $ok = $false
+              for ($i=0; $i -lt 50; $i++) {
+                Start-Sleep -Milliseconds 200
+                if ($fixture.HasExited) { throw "fixture exited early for $state" }
+                try {
+                  $h = Invoke-RestMethod "http://127.0.0.1:$port/api/health" -TimeoutSec 2
+                  if ($h.version -eq '0.9.0') { $ok=$true; break }
+                } catch {}
+              }
+              if (-not $ok) { throw "fixture readiness failed for $state" }
+              $url = "http://127.0.0.1:$port/overlay/quiz"
+              $profile = Join-Path $env:RUNNER_TEMP ("soop-v9-dom-" + $state + "-" + $width + "x" + $height)
+              $dom = & $browser '--headless=new' '--disable-gpu' '--hide-scrollbars' '--no-first-run' "--user-data-dir=$profile" "--window-size=$width,$height" '--virtual-time-budget=2200' '--dump-dom' $url 2>$null
+              $joined = ($dom -join "`n")
+              if ($joined -notmatch 'data-overflow="0"') { throw "overlay overflow detected: $state ${width}x${height}" }
+              if ($joined -notmatch ('data-scene="' + $state + '"')) { throw "wrong rendered scene: $state ${width}x${height}" }
+              if ($state -ne 'ANSWER_REVEALED' -and $joined -notmatch 'data-answer-visible="0"') { throw "answer visibility leak: $state ${width}x${height}" }
+              if ($state -eq 'ANSWER_REVEALED' -and $joined -notmatch 'data-answer-visible="1"') { throw "answer banner missing: $state ${width}x${height}" }
+
+              $shot = Join-Path (Get-Location) ("quiz-overlay/v9-" + $state.ToLower() + "-" + $width + "x" + $height + ".png")
+              $shotProfile = Join-Path $env:RUNNER_TEMP ("soop-v9-shot-" + $state + "-" + $width + "x" + $height)
+              & $browser '--headless=new' '--disable-gpu' '--hide-scrollbars' '--no-first-run' "--user-data-dir=$shotProfile" "--window-size=$width,$height" '--virtual-time-budget=2200' "--screenshot=$shot" $url 2>$null | Out-Null
+              if (-not (Test-Path $shot)) { throw "screenshot failed: $shot" }
+            } finally {
+              try { if (-not $fixture.HasExited) { Stop-Process -Id $fixture.Id -Force -ErrorAction SilentlyContinue } } catch {}
+              Start-Sleep -Milliseconds 300
+            }
+          }
+
+          Test-LayerState 'QUESTION_SHOWN' 8898 1280 720
+          Test-LayerState 'ANSWERING' 8898 1280 720
+          Test-LayerState 'QUESTION_CLOSED' 8898 1280 720
+          Test-LayerState 'ANSWER_REVEALED' 8898 1280 720
+          Test-LayerState 'QUESTION_SHOWN' 8898 1920 1080
+          Test-LayerState 'ANSWER_REVEALED' 8898 1920 1080
+
+      - name: Build all-in-one v0.9 release EXE
+        run: python quiz-overlay/build_v9_release.py
+
+      - name: End-user EXE smoke
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path 'quiz-overlay/dist-v9/SOOP-Quiz-Studio-v0.9.0.exe'
+          $p = Start-Process $exe -PassThru
+          try {
+            $overlayOk=$false; $coreOk=$false
+            for ($i=0; $i -lt 100; $i++) {
+              Start-Sleep -Milliseconds 500
+              if ($p.HasExited) { throw "EXE exited early: $($p.ExitCode)" }
+              try {
+                $s = Invoke-RestMethod 'http://127.0.0.1:8765/api/state' -TimeoutSec 2
+                $h = Invoke-RestMethod 'http://127.0.0.1:8765/api/health' -TimeoutSec 2
+                $quiz = Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:8765/overlay/quiz' -TimeoutSec 2
+                $rank = Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:8765/overlay/top10' -TimeoutSec 2
+                if ($s.app.version -eq '0.9.0' -and $h.version -eq '0.9.0' -and $quiz.Content -match 'getBoundingClientRect' -and $quiz.Content -match 'dataset.answerVisible' -and $rank.StatusCode -eq 200) { $overlayOk=$true }
+              } catch {}
+              try { if ((Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:18765/readyz' -TimeoutSec 2).StatusCode -eq 200) { $coreOk=$true } } catch {}
+              if ($overlayOk -and $coreOk) { break }
+            }
+            if (-not $overlayOk) { throw 'v0.9 release overlay smoke failed' }
+            if (-not $coreOk) { throw 'v0.9 embedded Core smoke failed' }
+            Start-Sleep -Seconds 1
+            python -c "from PIL import ImageGrab; ImageGrab.grab().save(r'quiz-overlay/v9-app-smoke.png')"
+          } finally {
+            try { if (-not $p.HasExited) { [void]$p.CloseMainWindow(); Start-Sleep -Seconds 2 } } catch {}
+            try { if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } } catch {}
+            Start-Sleep -Seconds 1
+            Get-NetTCPConnection -LocalPort 18765 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
+          }
+
+      - name: Validate EXE
+        shell: pwsh
+        run: |
+          $exe='quiz-overlay/dist-v9/SOOP-Quiz-Studio-v0.9.0.exe'
+          if (-not (Test-Path $exe)) { throw 'EXE missing' }
+          $f=Get-Item $exe
+          if ($f.Length -lt 10000000) { throw 'EXE unexpectedly small' }
+          Get-FileHash $exe -Algorithm SHA256 | Format-List
+          Write-Host ('EXE size: {0:N1} MiB' -f ($f.Length/1MB))
+
+      - name: Upload Windows EXE and visual QA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SOOP-Quiz-Studio-v0.9.0-Windows-AllInOne
+          path: |
+            quiz-overlay/dist-v9/SOOP-Quiz-Studio-v0.9.0.exe
+            quiz-overlay/v9-*.png
+          if-no-files-found: error
+          retention-days: 14
