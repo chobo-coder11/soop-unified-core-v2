@@ -11,6 +11,10 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 
 
+def _ascii(text: object) -> str:
+    return str(text).encode("ascii", "backslashreplace").decode("ascii")
+
+
 def _dump_failure(driver, screenshot: str, expected: str) -> None:
     try:
         metrics = driver.execute_script(
@@ -30,26 +34,26 @@ def _dump_failure(driver, screenshot: str, expected: str) -> None:
             };
             """
         )
-        print("BROWSER_TIMEOUT=" + json.dumps(metrics, ensure_ascii=False))
+        print("BROWSER_TIMEOUT=" + json.dumps(metrics, ensure_ascii=True))
     except Exception as exc:
-        print("BROWSER_TIMEOUT_METRICS_ERROR=" + repr(exc))
+        print("BROWSER_TIMEOUT_METRICS_ERROR=" + _ascii(repr(exc)))
     try:
         for row in driver.get_log("browser"):
-            print("BROWSER_CONSOLE=" + json.dumps(row, ensure_ascii=False))
+            print("BROWSER_CONSOLE=" + json.dumps(row, ensure_ascii=True))
     except Exception as exc:
-        print("BROWSER_LOG_ERROR=" + repr(exc))
+        print("BROWSER_LOG_ERROR=" + _ascii(repr(exc)))
     try:
         Path(screenshot).parent.mkdir(parents=True, exist_ok=True)
         driver.save_screenshot(screenshot)
-        print("BROWSER_TIMEOUT_SCREENSHOT=" + screenshot)
+        print("BROWSER_TIMEOUT_SCREENSHOT=" + _ascii(screenshot))
     except Exception as exc:
-        print("BROWSER_SCREENSHOT_ERROR=" + repr(exc))
+        print("BROWSER_SCREENSHOT_ERROR=" + _ascii(repr(exc)))
     try:
         src = driver.page_source
-        print("BROWSER_SOURCE_HEAD=" + src[:3000].replace("\n", "\\n"))
+        print("BROWSER_SOURCE_HEAD=" + _ascii(src[:3000].replace("\n", "\\n")))
     except Exception as exc:
-        print("BROWSER_SOURCE_ERROR=" + repr(exc))
-    print("BROWSER_EXPECTED_SCENE=" + expected)
+        print("BROWSER_SOURCE_ERROR=" + _ascii(repr(exc)))
+    print("BROWSER_EXPECTED_SCENE=" + _ascii(expected))
 
 
 def main() -> None:
@@ -100,7 +104,7 @@ def main() -> None:
             };
             """
         )
-        print("BROWSER_METRICS=" + json.dumps(metrics, ensure_ascii=False))
+        print("BROWSER_METRICS=" + json.dumps(metrics, ensure_ascii=True))
         if metrics["scene"] != args.state:
             raise SystemExit("wrong scene: %r" % metrics["scene"])
         if not metrics["contentText"].strip():
