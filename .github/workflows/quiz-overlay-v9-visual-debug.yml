@@ -1,0 +1,57 @@
+name: Debug SOOP Quiz v0.9 Overlay 720p
+
+on:
+  push:
+    branches: [feature/quiz-overlay-draft]
+    paths:
+      - 'quiz-overlay/overlay_server_v9*.py'
+      - 'quiz-overlay/overlay_fixture_v9*.py'
+      - '.github/workflows/quiz-overlay-v9-visual-debug.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  debug-overlay:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Capture rendered DOM and screenshot even on overflow
+        shell: pwsh
+        run: |
+          $browser = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
+          if (-not (Test-Path $browser)) { $browser = 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe' }
+          if (-not (Test-Path $browser)) { throw 'Chromium browser missing' }
+          $fixture = Start-Process python -ArgumentList @('quiz-overlay/overlay_fixture_v9_release.py','QUESTION_SHOWN','8898') -PassThru -WindowStyle Hidden
+          try {
+            for ($i=0;$i -lt 40;$i++) { Start-Sleep -Milliseconds 200; try { if ((Invoke-RestMethod 'http://127.0.0.1:8898/api/health').version -eq '0.9.0') { break } } catch {} }
+            $url='http://127.0.0.1:8898/overlay/quiz'
+            $profile=Join-Path $env:RUNNER_TEMP 'soop-v9-debug-dom'
+            $dom=& $browser '--headless=new' '--disable-gpu' '--hide-scrollbars' '--no-first-run' "--user-data-dir=$profile" '--window-size=1280,720' '--virtual-time-budget=2500' '--dump-dom' $url 2>$null
+            $joined=$dom -join "`n"
+            Set-Content -Path 'quiz-overlay/v9-debug-dom.html' -Value $joined -Encoding UTF8
+            $body=[regex]::Match($joined,'<body[^>]*>').Value
+            Write-Host "BODY TAG: $body"
+            $card=[regex]::Match($joined,'<main id="card"[^>]*>').Value
+            Write-Host "CARD TAG: $card"
+            $shot=Join-Path (Get-Location) 'quiz-overlay/v9-debug-1280x720.png'
+            $shotProfile=Join-Path $env:RUNNER_TEMP 'soop-v9-debug-shot'
+            & $browser '--headless=new' '--disable-gpu' '--hide-scrollbars' '--no-first-run' "--user-data-dir=$shotProfile" '--window-size=1280,720' '--virtual-time-budget=2500' "--screenshot=$shot" $url 2>$null | Out-Null
+          } finally {
+            try { if (-not $fixture.HasExited) { Stop-Process -Id $fixture.Id -Force } } catch {}
+          }
+      - name: Upload debug evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SOOP-Quiz-v0.9-720p-debug
+          path: |
+            quiz-overlay/v9-debug-dom.html
+            quiz-overlay/v9-debug-1280x720.png
+          if-no-files-found: warn
+          retention-days: 3
