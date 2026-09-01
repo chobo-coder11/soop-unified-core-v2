@@ -1,0 +1,72 @@
+name: Visual QA SOOP Quiz Studio v0.8 Full Window
+
+on:
+  push:
+    branches: [feature/quiz-overlay-draft]
+    paths:
+      - 'quiz-overlay/capture_v8_fullwindow.py'
+      - '.github/workflows/quiz-overlay-v8-full-visual.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  visual-qa-v8-full:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Build Unified Core
+        shell: pwsh
+        run: |
+          npm install --no-package-lock
+          npm run build
+          npm prune --omit=dev --no-package-lock
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: python -m pip install -r quiz-overlay/requirements.txt pyinstaller==6.15.0 pillow
+
+      - name: Build v0.8 EXE
+        run: python quiz-overlay/build_v8.py
+
+      - name: Launch and capture 1480x900 full window
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path 'quiz-overlay/dist-v8/SOOP-Quiz-Studio-v0.8.0.exe'
+          $p = Start-Process $exe -PassThru
+          try {
+            $ok=$false
+            for ($i=0; $i -lt 100; $i++) {
+              Start-Sleep -Milliseconds 400
+              if ($p.HasExited) { throw "EXE exited early: $($p.ExitCode)" }
+              try {
+                $s=Invoke-RestMethod 'http://127.0.0.1:8765/api/state' -TimeoutSec 2
+                if ($s.app.version -eq '0.8.0') { $ok=$true; break }
+              } catch {}
+            }
+            if (-not $ok) { throw 'App readiness failed' }
+            Start-Sleep -Seconds 1
+            python quiz-overlay/capture_v8_fullwindow.py
+            if (-not (Test-Path 'quiz-overlay/v8-full-window.png')) { throw 'Full UI capture failed' }
+          } finally {
+            try { if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } } catch {}
+            Get-NetTCPConnection -LocalPort 18765 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
+          }
+
+      - name: Upload full-window visual QA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SOOP-Quiz-Studio-v0.8.0-Full-Visual-QA
+          path: quiz-overlay/v8-full-window.png
+          if-no-files-found: error
+          retention-days: 14
