@@ -15,7 +15,9 @@
     "test": "npm run verify:repo && tsx --test tests/*.test.ts",
     "smoke": "tsx scripts/smoke.ts",
     "test:compiled": "node --test dist/tests/*.test.js",
-    "soak": "tsx scripts/soak.ts"
+    "soak": "tsx scripts/soak.ts",
+    "desktop": "npm run build && electron .",
+    "build:windows": "npm run build && electron-builder --win nsis"
   },
   "dependencies": {
     "ws": "8.18.0"
@@ -28,6 +30,18 @@
     "@types/node": "22.10.2",
     "@types/ws": "8.5.13",
     "tsx": "4.19.2",
-    "typescript": "5.7.2"
+    "typescript": "5.7.2",
+    "electron": "38.1.0",
+    "electron-builder": "26.0.12"
+  },
+  "main": "desktop/main.cjs",
+  "build": {
+    "appId": "live.soop.starbox",
+    "productName": "별상자 스튜디오",
+    "artifactName": "StarBox-Studio-Setup-${version}.${ext}",
+    "files": ["desktop/**/*", "dist/**/*", "package.json", "node_modules/ws/**/*"],
+    "directories": {"output": "release"},
+    "win": {"target": "nsis"},
+    "nsis": {"oneClick": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true, "shortcutName": "별상자 스튜디오"}
   }
 }

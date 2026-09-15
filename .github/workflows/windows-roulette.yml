@@ -1,0 +1,31 @@
+name: Build StarBox Studio for Windows
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "src/roulette/**"
+      - "desktop/**"
+      - "src/server/api-server.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/windows-roulette.yml"
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - run: npm run build
+      - run: npm run test:compiled
+      - run: npx electron-builder --win nsis
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StarBox-Studio-Windows
+          path: release/StarBox-Studio-Setup-*.exe
+          if-no-files-found: error

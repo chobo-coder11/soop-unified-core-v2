@@ -8,6 +8,8 @@ import{WsHub,validId}from'./ws-hub.js';
 import{secureTokenEqual}from'./auth.js';
 import{httpStatusForError}from'./errors.js';
 import{STUDIO_HTML}from'./studio.js';
+import{RouletteManager}from'../roulette/manager.js';
+import{ROULETTE_ADMIN_HTML,ROULETTE_OVERLAY_HTML,ROULETTE_ADMIN_JS,ROULETTE_OVERLAY_JS}from'../roulette/ui.js';
 
 const json=(res:ServerResponse,status:number,data:any)=>{const body=JSON.stringify(data);res.writeHead(status,{'content-type':'application/json; charset=utf-8','content-length':Buffer.byteLength(body)});res.end(body)};
 const clean=(value:any,debug=false)=>debug?value:JSON.parse(JSON.stringify(value,(key,v)=>key==='raw'?undefined:v));
@@ -20,21 +22,40 @@ async function readJson(req:IncomingMessage,maxBytes:number){
 }
 
 export class ApiServer{
-  readonly server:http.Server;readonly ws:WsHub;private limiter:FixedWindowRateLimiter;
+  readonly server:http.Server;readonly ws:WsHub;private limiter:FixedWindowRateLimiter;private roulette=new RouletteManager();private rouletteClients=new Set<ServerResponse>();
   constructor(private service:UnifiedService,private cfg:AppConfig){
     this.limiter=new FixedWindowRateLimiter(cfg.rateLimitPerMinute);this.ws=new WsHub(service,cfg);
     this.server=http.createServer((req,res)=>void this.handle(req,res));
+    service.pool.on('event',(e)=>this.roulette.donation(e));
+    this.roulette.on('change',(event)=>{const line=`data: ${JSON.stringify(event)}\n\n`;for(const client of this.rouletteClients)try{client.write(line)}catch{this.rouletteClients.delete(client)}});
     this.server.on('upgrade',(req,socket,head)=>{const u=new URL(req.url??'/',`http://${req.headers.host??'localhost'}`);if(u.pathname!=='/v1/ws'||!this.authorized(req)){socket.destroy();return}const lim=this.limiter.allow(req.socket.remoteAddress??'unknown');if(!lim.ok){socket.destroy();return}this.ws.handleUpgrade(req,socket,head)})
   }
   listen(){return new Promise<void>(r=>this.server.listen(this.cfg.port,this.cfg.host,r))}
   private authorized(req:IncomingMessage){if(!this.cfg.apiKey)return true;const raw=req.headers['x-api-key'],apiKey=Array.isArray(raw)?raw[0]:raw,bearer=(req.headers.authorization??'').replace(/^Bearer\s+/i,'');return secureTokenEqual(apiKey,this.cfg.apiKey)||secureTokenEqual(bearer,this.cfg.apiKey)}
   private writeAllowed(){return this.cfg.enableWriteApi&&Boolean(this.cfg.apiKey)}
+  private local(req:IncomingMessage){const ip=req.socket.remoteAddress??'';return ip==='127.0.0.1'||ip==='::1'||ip==='::ffff:127.0.0.1'}
 
   private async handle(req:IncomingMessage,res:ServerResponse){
     const u=new URL(req.url??'/',`http://${req.headers.host??'localhost'}`);
     if(req.method==='GET'&&u.pathname==='/livez')return json(res,200,{ok:true,status:'alive',uptimeSec:Math.floor(process.uptime())});
     if(req.method==='GET'&&u.pathname==='/readyz')return json(res,200,{ok:true,status:'ready',connections:this.service.pool.list().length,time:new Date().toISOString()});
     if(req.method==='GET'&&u.pathname==='/studio'){const body=STUDIO_HTML;res.writeHead(200,{'content-type':'text/html; charset=utf-8','content-length':Buffer.byteLength(body)});return res.end(body)}
+    if(req.method==='GET'&&u.pathname==='/roulette'){const body=ROULETTE_ADMIN_HTML;res.writeHead(200,{'content-type':'text/html; charset=utf-8','content-length':Buffer.byteLength(body),'cache-control':'no-store'});return res.end(body)}
+    if(req.method==='GET'&&u.pathname==='/roulette/overlay'){const body=ROULETTE_OVERLAY_HTML;res.writeHead(200,{'content-type':'text/html; charset=utf-8','content-length':Buffer.byteLength(body),'cache-control':'no-store'});return res.end(body)}
+    if(req.method==='GET'&&u.pathname==='/roulette/admin.js'){const body=ROULETTE_ADMIN_JS;res.writeHead(200,{'content-type':'text/javascript; charset=utf-8','content-length':Buffer.byteLength(body),'cache-control':'no-store'});return res.end(body)}
+    if(req.method==='GET'&&u.pathname==='/roulette/overlay.js'){const body=ROULETTE_OVERLAY_JS;res.writeHead(200,{'content-type':'text/javascript; charset=utf-8','content-length':Buffer.byteLength(body),'cache-control':'no-store'});return res.end(body)}
+    if(u.pathname.startsWith('/v1/roulette')){
+      if(!this.local(req))return json(res,403,{ok:false,error:'룰렛 관리는 이 PC에서만 사용할 수 있습니다.'});
+      try{
+        if(req.method==='GET'&&u.pathname==='/v1/roulette/state')return json(res,200,{ok:true,state:this.roulette.snapshot()});
+        if(req.method==='GET'&&u.pathname==='/v1/roulette/events'){res.writeHead(200,{'content-type':'text/event-stream; charset=utf-8','cache-control':'no-cache','connection':'keep-alive'});res.write(`data: ${JSON.stringify({type:'ready',state:this.roulette.snapshot()})}\n\n`);this.rouletteClients.add(res);req.on('close',()=>this.rouletteClients.delete(res));return}
+        if(req.method==='POST'&&u.pathname==='/v1/roulette/settings'){const body=await readJson(req,this.cfg.maxBodyBytes),next=String(body.streamerId??'').trim();if(!validId(next))return json(res,400,{ok:false,error:'SOOP 스트리머 ID를 확인해 주세요.'});const old=this.roulette.snapshot().streamerId;if(old&&old!==next)await this.service.pool.unpin(old);this.roulette.setStreamer(next);await this.service.pool.pin(next);return json(res,200,{ok:true,state:this.roulette.snapshot()})}
+        if(req.method==='POST'&&u.pathname==='/v1/roulette/boxes'){const body=await readJson(req,this.cfg.maxBodyBytes),box=this.roulette.createBox({title:String(body.title??''),code:String(body.code??''),goal:Number(body.goal)});return json(res,201,{ok:true,box,state:this.roulette.snapshot()})}
+        const boxPath=u.pathname.match(/^\/v1\/roulette\/boxes\/([0-9a-f-]+)$/);if(req.method==='DELETE'&&boxPath){const box=this.roulette.archiveBox(boxPath[1]);return json(res,200,{ok:true,box,state:this.roulette.snapshot()})}
+        if(req.method==='POST'&&u.pathname==='/v1/roulette/test-donation'){const body=await readJson(req,this.cfg.maxBodyBytes),result=this.roulette.testDonation({nickname:String(body.nickname||'테스트요정'),amount:Number(body.amount),message:String(body.message??'')});return json(res,200,{ok:true,result,state:this.roulette.snapshot()})}
+        return json(res,404,{ok:false,error:'not_found'});
+      }catch(e){return json(res,400,{ok:false,error:e instanceof Error?e.message:String(e)})}
+    }
     if(!this.authorized(req))return json(res,401,{ok:false,error:'unauthorized'});
     const lim=this.limiter.allow(req.socket.remoteAddress??'unknown');res.setHeader('x-ratelimit-remaining',String(lim.remaining));
     if(!lim.ok)return json(res,429,{ok:false,error:'rate_limited',resetMs:lim.resetMs});
@@ -75,5 +96,5 @@ export class ApiServer{
       return json(res,404,{ok:false,error:'not_found'});
     }catch(e){this.service.metrics.inc('soop_http_errors_total');const msg=e instanceof Error?e.message:String(e);const status=httpStatusForError(msg);return json(res,status,{ok:false,error:msg})}
   }
-  async close(){await this.ws.close();await new Promise<void>(r=>this.server.close(()=>r()))}
+  async close(){const id=this.roulette.snapshot().streamerId;if(id)await this.service.pool.unpin(id);for(const client of this.rouletteClients)client.end();await this.ws.close();await new Promise<void>(r=>this.server.close(()=>r()))}
 }

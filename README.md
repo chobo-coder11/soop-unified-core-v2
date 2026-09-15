@@ -1,5 +1,19 @@
 # SOOP Unified Core v2.6.0 Accuracy Hardened
 
+## 별상자 스튜디오
+
+이 저장소에는 SOOP 실시간 별풍선 이벤트를 사용하는 Windows 방송용 룰렛 앱이 포함되어 있습니다.
+
+- 관리 화면: `http://localhost:8080/roulette`
+- OBS/프릭샷 브라우저 소스: `http://localhost:8080/roulette/overlay`
+- 후원 메시지의 `#참여코드`로 여러 상자 중 하나를 지정
+- 목표 초과분과 미지정 후원은 후원자별 잔액으로 안전하게 보존
+- 목표 달성 즉시 지분 비례 추첨 및 귀여운 게임풍 방송 연출
+- 가상 후원 테스트, 방송 중 후원 장부 유지, 중복 이벤트 방지
+- 앱을 새로 열거나 종료하면 스트리머 ID, 상자, 지분, 잔액을 모두 초기화
+
+개발 환경에서는 `npm run desktop`, Windows 설치 파일은 `npm run build:windows`로 생성합니다. 설치본은 로컬 주소 `127.0.0.1:17847`을 사용하므로 외부 서버 없이 OBS 브라우저 소스와 연결됩니다.
+
 SOOP(구 아프리카TV)를 위한 **비공식 통합 API / 실시간 프로토콜 코어**입니다. 특정 BJ에 고정되지 않고 유효한 SOOP 스트리머 ID를 동적으로 조회·구독할 수 있습니다.
 
 핵심 목표는 단일 비공식 라이브러리를 감싸는 것이 아니라, **TypeScript Native Core가 SOOP HTTP/WebSocket 프로토콜을 직접 처리**하면서 독립 구현들을 fallback/검증 provider로 사용하고, 장애·불일치·프로토콜 변화까지 관측하는 것입니다.
