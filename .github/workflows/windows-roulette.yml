@@ -22,7 +22,7 @@ jobs:
       - run: npm install
       - run: npm run build
       - run: npm run test:compiled
-      - run: npx electron-builder --win nsis
+      - run: npx electron-builder --win nsis --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: StarBox-Studio-Windows
