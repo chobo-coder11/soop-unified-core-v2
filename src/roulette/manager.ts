@@ -1,6 +1,6 @@
 import{EventEmitter}from'node:events';import{existsSync,mkdirSync,readFileSync,renameSync,writeFileSync}from'node:fs';import{dirname,resolve}from'node:path';import type{CanonicalEvent}from'../types.js';import{RouletteEngine,type RouletteState}from'./engine.js';
 
-const STAR_BALLOON_KINDS=new Set(['star_balloon','star_balloon_sub','vod_balloon','video_balloon','challenge_mission','battle_mission']);
+const STAR_BALLOON_KINDS=new Set(['star_balloon','star_balloon_sub','adcon','station_adcon','challenge_mission','battle_mission']);
 export const isCountableStarBalloon=(e:CanonicalEvent)=>e.category==='donation'&&!!e.donation?.amount&&STAR_BALLOON_KINDS.has(e.donation.kind);
 
 export class RouletteManager extends EventEmitter{
