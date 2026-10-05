@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>새우 채팅마을</title><link rel="stylesheet" href="/style.css"></head>
+<body class="admin">
+<header class="topbar"><a class="brand" href="/"><img src="/assets/shrimp.png" alt=""><span>새우 채팅마을<small>SOOP CHAT OVERLAY</small></span></a><div id="connection-pill" class="pill"><i></i><span>준비 중</span></div></header>
+<main>
+<section class="intro"><div><p class="eyebrow">작은 새우들의 큰 수다</p><h1>채팅이 오면,<br><em>내 새우가 말해요.</em></h1><p class="description">화면 아래를 산책하다가 채팅할 때 잠깐 멈추는<br>시청자들의 말랑한 새우 마을.</p></div><div class="intro-art"><img src="/assets/shrimp.png" alt="말랑한 치비 새우"><span class="art-bubble">오늘도 같이 놀아요!</span><span class="spark spark-one">✦</span><span class="spark spark-two">✧</span></div></section>
+<section class="preview-card"><div class="section-heading"><div><span class="live-dot"></span><h2>마을 미리보기</h2><span class="muted">방송 화면에선 배경이 투명해요</span></div><div class="button-row"><button id="demo" class="button small">미리보기 재생</button><button id="clear" class="button small subtle">화면 비우기</button><a class="button small subtle" href="/overlay" target="_blank" rel="noopener">오버레이 열기 ↗</a></div></div>
+<div class="preview-stage"><div class="preview-caption"><span>YOUR STREAM</span><p>방송 화면 위에<br>이렇게 나타나요.</p></div><iframe id="preview" src="/overlay?preview=1" title="새우 채팅 오버레이 미리보기"></iframe><div class="ground-line"></div></div>
+<div class="preview-footer"><span id="status-detail">방송을 연결하거나 미리보기를 재생해 보세요.</span><span><b id="message-count">0</b>개 메시지 수신</span></div></section>
+<div class="workspace">
+<section class="panel connection-panel"><div class="panel-title"><span class="step">01</span><div><h2>방송 연결</h2><p>연결할 SOOP 방송을 알려 주세요.</p></div></div>
+<form id="connection-form"><label>SOOP 방송 ID<input id="streamerId" placeholder="예: 방송국 주소의 영문 ID" autocomplete="off" maxlength="64"></label><p class="hint">닉네임 대신 방송국 주소에 있는 ID를 입력해 주세요.</p>
+<div class="segmented"><label><input type="radio" name="mode" value="builtin" checked><span>내장 코어</span></label><label><input type="radio" name="mode" value="external"><span>외부 코어</span></label></div>
+<div id="builtin-help" class="note">SOOP Unified Core가 함께 실행돼요.<br>별도로 코어 프로그램을 켤 필요가 없어요.</div>
+<div id="external-fields" hidden><label>코어 소켓 주소<input id="coreUrl" value="ws://127.0.0.1:8080/v1/ws" spellcheck="false"></label><label>API 키 <span class="muted">선택</span><input id="apiKey" type="password" autocomplete="off" placeholder="설정된 경우에만 입력"></label><label class="check"><input id="clearKey" type="checkbox">저장된 API 키 지우기</label></div>
+<div class="button-row"><button class="button primary" id="connect" type="submit">방송 연결하기</button><button class="button subtle" id="disconnect" type="button">연결 중지</button></div></form>
+<div class="overlay-address"><label for="overlayUrl">방송용 오버레이 주소</label><div><input id="overlayUrl" readonly><button id="copy" class="button small">복사</button></div><p class="hint">OBS 브라우저 소스에 넣고 화면 크기와 맞춰 주세요.<br>프릭샷플러스는 웹 주소를 표시하는 소스가 있으면 같은 주소를 사용하세요.</p></div>
+<details class="setup"><summary>방송에 넣는 방법</summary><ol><li>이 프로그램을 켜 둡니다.</li><li>OBS에서 소스 추가 → 브라우저를 선택합니다.</li><li>위 주소를 넣고 너비 1920, 높이 1080으로 설정합니다.</li><li>소스를 방송 화면 위에 놓습니다. 배경은 자동으로 투명합니다.</li><li>‘소스가 보이지 않으면 종료’는 끄는 것을 권장합니다.</li></ol><p>전체 화면 크기로 넣어야 말풍선이 위쪽에서 잘리지 않아요. 방송 해상도가 다르면 같은 크기로 맞춰 주세요.</p></details>
+</section>
+<section class="panel"><div class="panel-title"><span class="step">02</span><div><h2>마을 꾸미기</h2><p>크기와 움직임을 방송에 맞춰요.</p></div></div>
+<form id="appearance-form"><div class="slider-grid">
+<label>새우 크기 <output for="size"></output><input id="size" type="range" min="56" max="180" step="1"></label>
+<label>걷는 속도 <output for="speed"></output><input id="speed" type="range" min="8" max="90" step="1"></label>
+<label>최대 새우 수 <output for="maxCharacters"></output><input id="maxCharacters" type="range" min="4" max="48" step="1"></label>
+<label>동시 말풍선 <output for="maxBubbles"></output><input id="maxBubbles" type="range" min="1" max="8" step="1"></label>
+<label>말풍선 시간 <output for="bubbleSeconds"></output><input id="bubbleSeconds" type="range" min="2" max="12" step="1"></label>
+<label>글자 크기 <output for="fontSize"></output><input id="fontSize" type="range" min="14" max="32" step="1"></label>
+<label>아래 여백 <output for="bottom"></output><input id="bottom" type="range" min="0" max="240" step="1"></label>
+<label>활동 없는 새우 퇴장 <output for="idleMinutes"></output><input id="idleMinutes" type="range" min="1" max="60" step="1"></label>
+<label>처음 산책하는 새우 <output for="ambientCharacters"></output><input id="ambientCharacters" type="range" min="0" max="12" step="1"></label></div>
+<div class="select-grid"><label>이름표<select id="showNames"><option value="speaking">말할 때만</option><option value="always">항상 표시</option><option value="never">숨기기</option></select></label><label>새우 색상<select id="palette"><option value="pastel">시청자별 파스텔</option><option value="peach">모두 복숭아색</option></select></label></div>
+<button class="button primary" type="submit">꾸미기 저장</button></form></section>
+<section class="panel"><div class="panel-title"><span class="step">03</span><div><h2>직접 말 걸기</h2><p>실제 SOOP 채팅을 보내지 않는 화면 테스트예요.</p></div></div>
+<form id="test-form"><label>테스트 닉네임<input id="testNickname" value="부울경" maxlength="48"></label><label>테스트 채팅<textarea id="testMessage" rows="3" maxlength="300">안녕하세요! 내 새우가 말해요 🦐</textarea></label><button class="button primary" type="submit">새우에게 말시키기</button></form>
+<div class="recent-heading"><h3>최근 표시한 채팅</h3><span class="muted">최대 12개</span></div><div id="recent-chat" class="chat-list"><p class="empty">아직 채팅이 없어요.</p></div></section>
+<section class="panel"><div class="panel-title"><span class="step">04</span><div><h2>표시 관리</h2><p>화면에 표시할 채팅을 관리해요.</p></div></div><form id="filter-form"><label>숨길 계정 ID<textarea id="blockedUsers" rows="3" placeholder="한 줄에 하나씩 입력"></textarea></label><label>숨길 단어<textarea id="bannedWords" rows="3" placeholder="이 단어를 포함한 채팅은 표시하지 않아요"></textarea></label><p class="hint">방송 제재 이벤트를 받으면 해당 새우와 말풍선도 숨깁니다.</p><button class="button" type="submit">표시 설정 저장</button></form></section>
+</div><footer>새우 채팅마을 <span>v1.0.0 · SOOP Unified Core v2.6 연동</span><small>프로그램을 종료하면 방송 오버레이도 중지됩니다.</small></footer>
+</main><div id="toast" role="status" aria-live="polite" hidden></div><script type="module" src="/admin.js"></script></body></html>

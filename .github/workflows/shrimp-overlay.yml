@@ -1,0 +1,31 @@
+name: Shrimp Overlay
+on:
+  push:
+    paths: ['apps/shrimp-overlay/**', 'src/**', '.github/workflows/shrimp-overlay.yml']
+  pull_request:
+    paths: ['apps/shrimp-overlay/**', 'src/**', '.github/workflows/shrimp-overlay.yml']
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Build bundled native core
+        working-directory: apps/shrimp-overlay
+        run: node build-core.mjs
+      - name: Test chat bridge and overlay model
+        working-directory: apps/shrimp-overlay
+        run: node --test tests/*.test.mjs
+      - name: Upload standalone program
+        if: matrix.node == 24
+        uses: actions/upload-artifact@v4
+        with:
+          name: soop-shrimp-overlay
+          path: apps/shrimp-overlay/
+          include-hidden-files: true
