@@ -1,7 +1,10 @@
+import { idleMotion, reactionFor, moveAgent } from './motion.mjs';
 export function hash(value) { let n = 2166136261; for (const ch of value) n = Math.imul(n ^ ch.charCodeAt(0), 16777619); return n >>> 0; }
 export class Village {
   constructor(settings) { this.settings = settings; this.agents = new Map(); this.queue = new Map(); this.bubbles = []; this.dropped = 0; this.width = 1920; this.height = 1080; }
   configure(settings) {
+    for (const b of this.bubbles) this.queue.set(b.key, { ...b.chat, queuedAt: b.started });
+    this.bubbles = [];
     this.settings = { ...this.settings, ...settings };
     for (const chat of this.queue.values()) if (this.isFiltered(chat)) this.queue.delete(this.key(chat));
     for (const agent of this.agents.values()) if ((this.settings.blockedUsers || []).some(x => x.toLowerCase() === agent.userId.toLowerCase())) this.hideUser(agent.userId);
@@ -26,6 +29,7 @@ export class Village {
       this.agents.set(key, a);
     }
     a.nickname = chat.nickname; a.lastChat = now;
+    a.reaction = reactionFor(chat.message); a.reactionAt = now;
     const active = this.bubbles.find(b => b.key === key);
     if (active) {
       // Each viewer owns one bubble; cap extension so continuous typing cannot monopolize a slot.
@@ -47,30 +51,34 @@ export class Village {
     for (const [key, chat] of this.queue) if (now - chat.queuedAt > 12000 || !this.agents.has(key)) { this.queue.delete(key); this.dropped++; }
     for (const a of this.agents.values()) {
       if (now - a.lastChat > this.settings.idleMinutes * 60000) { this.agents.delete(a.key); this.queue.delete(a.key); continue; }
+      const wasTalking = a.talking;
       a.talking = this.bubbles.some(b => b.key === a.key);
       a.waiting = this.queue.has(a.key);
-      if (a.talking || a.waiting || now < a.idleUntil) continue;
-      const margin = Math.min(this.width / 2, this.settings.size * .5);
-      a.x += a.dir * this.settings.speed * a.speed * dt;
-      if (a.x <= margin) { a.x = margin; a.dir = 1; a.idleUntil = now + 250; }
-      if (a.x >= this.width - margin) { a.x = this.width - margin; a.dir = -1; a.idleUntil = now + 250; }
-      a.phase += dt * 9;
+      if (wasTalking && !a.talking) { a.motion = 'walk'; a.motionUntil = 0; a.nextMotionAt = now + 5000 + a.seed % 4000; }
+      if (!a.talking && !a.waiting && now >= a.idleUntil) idleMotion(a, now, this.settings.extraMotion !== false);
+      moveAgent(a, now, dt, { speed: this.settings.speed, size: this.settings.size, width: this.width }, a.talking || a.waiting || now < a.idleUntil || a.motion !== 'walk');
     }
     for (const [key, chat] of this.queue) {
       if (this.bubbles.length >= this.settings.maxBubbles) break;
-      const a = this.agents.get(key); if (!a) continue;
-      const measured = measure(chat, Math.min(280, this.width - 24));
+      const a = this.agents.get(key); if (!a || Math.abs(a.velocity || 0) > .4) continue;
+      const measured = measure(chat, Math.min(this.settings.bubbleMaxWidth || 360, this.width - 24));
       const rect = this.findSpace(a.x, measured);
       if (!rect) continue;
       this.bubbles.push({ key, chat, ...rect, lines: measured.lines, until: now + this.settings.bubbleSeconds * 1000, started: now });
       this.queue.delete(key); a.talking = true;
     }
   }
+  characterBase() {
+    const c = this.settings;
+    const reserve = c.showNames !== 'never' && c.namePosition !== 'above' ? (c.nameFontSize || 18) + (c.namePaddingY ?? 5) * 2 + (c.nameGap ?? 2) + 4 : 18;
+    return this.height - c.bottom - Math.max(18, reserve);
+  }
   findSpace(x, measured) {
     const w = Math.min(measured.w, this.width - 16), h = measured.h;
     const bx = Math.max(8, Math.min(this.width - w - 8, x - w / 2));
-    const baseline = this.height - this.settings.bottom - this.settings.size - 36;
-    for (let lane = 0; lane < 3; lane++) {
+    const nameHeight = this.settings.namePosition === 'above' && this.settings.showNames !== 'never' ? (this.settings.nameFontSize || 18) + 2 * (this.settings.namePaddingY ?? 5) + (this.settings.nameGap ?? 2) : 0;
+    const baseline = this.characterBase() - this.settings.size * .9 - (this.settings.bubbleGap ?? 10) - nameHeight;
+    for (let lane = 0; lane < 1; lane++) {
       const y = baseline - h - lane * (h + 14);
       if (y < 8) continue;
       const collision = this.bubbles.some(b => bx < b.x + b.w + 10 && bx + w + 10 > b.x && y < b.y + b.h + 10 && y + h + 10 > b.y);

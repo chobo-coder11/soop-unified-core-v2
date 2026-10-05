@@ -123,16 +123,18 @@ async function mutate(route, value) {
 }
 const allowedHosts = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`, `[::1]:${PORT}`]);
 const staticRoutes = new Map([
-  ['/', 'public/index.html'], ['/overlay', 'public/overlay.html'], ['/overlay.js', 'public/overlay.js'], ['/model.mjs', 'public/model.mjs'],
-  ['/admin.js', 'public/admin.js'], ['/style.css', 'public/style.css'], ['/assets/shrimp.png', 'public/assets/shrimp.png']
+  ['/', 'public/index.html'], ['/overlay', 'public/overlay.html'], ['/overlay.js', 'public/overlay.js'], ['/model.mjs', 'public/model.mjs'], ['/motion.mjs', 'public/motion.mjs'],
+  ['/admin.js', 'public/admin.js'], ['/style.css', 'public/style.css'], ['/assets/shrimp.png', 'public/assets/shrimp.png'],
+  ['/assets/shrimp-poses.png', 'public/assets/shrimp-poses.png'], ['/assets/shrimp-walk.png', 'public/assets/shrimp-walk.png'],
+  ['/assets/fonts/Gaegu-Regular.woff2', 'public/assets/fonts/Gaegu-Regular.woff2'], ['/assets/fonts/Jua-Regular.woff2', 'public/assets/fonts/Jua-Regular.woff2']
 ]);
-const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png' };
+const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.woff2': 'font/woff2' };
 const server = http.createServer(async (req, res) => {
   if (!allowedHosts.has(req.headers.host)) return json(res, 403, { error: '허용되지 않은 호스트입니다.' });
   const route = new URL(req.url, `http://127.0.0.1:${PORT}`).pathname;
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; frame-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'none'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self'; connect-src 'self'; frame-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'none'");
   if (req.method === 'GET' && route === '/api/state') return json(res, 200, snapshot(true));
   if (req.method === 'GET' && route === '/events') {
     if (clients.size >= 20) return json(res, 503, { error: '화면 연결 수가 너무 많습니다.' });

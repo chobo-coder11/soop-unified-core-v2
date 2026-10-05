@@ -38,3 +38,18 @@ test('settings reject invalid endpoints, numbers, and streamer IDs; secrets stay
   assert.equal(publicSettings(cfg).hasApiKey, true); assert.ok(!JSON.stringify(publicSettings(cfg)).includes('secret'));
   assert.equal(filtered(chat('one', '새우', 'BAD text'), { blockedUsers: [], bannedWords: ['bad'] }), true);
 });
+
+test('attached bubbles stay close to the head and reflow after style changes', () => {
+  const v = new Village(DEFAULTS); v.chat(chat('attached'), 100); v.step(100, 0, measure);
+  const b = v.bubbles[0];
+  assert.equal(b.lane, 0);
+  assert.equal(b.y + b.h, v.characterBase() - DEFAULTS.size * .9 - DEFAULTS.bubbleGap);
+  v.configure({ fontSize: 30, bubblePadding: 24, namePosition: 'above', nameFontSize: 26 });
+  assert.equal(v.bubbles.length, 0); assert.equal(v.queue.size, 1);
+  v.step(200, 0, () => ({ w: 340, h: 110, lines: ['재배치'] }));
+  assert.equal(v.bubbles[0].w, 340);
+  assert.ok(v.bubbles[0].y + 110 < v.characterBase() - DEFAULTS.size * .9 - 26);
+  assert.throws(() => normalizeSettings({ nameFontSize: 90 }));
+  assert.throws(() => normalizeSettings({ bubbleBg: 'url(foo)' }));
+  assert.equal(normalizeSettings({ fontFamily: 'gaegu', nameFontSize: 30 }).nameFontSize, 30);
+});
