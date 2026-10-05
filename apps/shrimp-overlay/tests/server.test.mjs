@@ -33,8 +33,8 @@ test('real server forwards authenticated core chat over SSE; saves settings, fil
     start(); await waitFor(async () => { try { return (await fetch(url + '/api/state')).ok; } catch { return false; } });
     let state = await fetch(url + '/api/state').then(r => r.json());
     assert.equal(state.service, 'soop-shrimp-overlay');
-    assert.equal(state.version, '1.4.0');
-    for (const asset of [...new Set(CHARACTERS.flatMap(c=>[c.poses,c.walking])),'/characters.mjs','/assets/shrimp-walk.png','/assets/shrimp-poses.png','/assets/fonts/Jua-Regular.woff2','/assets/fonts/Gaegu-Regular.woff2','/motion.mjs','/rendering.mjs','/emotes.mjs']) {
+    assert.equal(state.version, '1.4.1');
+    for (const asset of [...new Set(CHARACTERS.flatMap(c=>[c.poses,c.walking])),'/characters.mjs','/mouth.mjs','/assets/shrimp-walk.png','/assets/shrimp-poses.png','/assets/fonts/Jua-Regular.woff2','/assets/fonts/Gaegu-Regular.woff2','/motion.mjs','/rendering.mjs','/emotes.mjs']) {
       const response = await fetch(url + asset); assert.equal(response.status, 200);
       const bytes = new Uint8Array(await response.arrayBuffer()); assert.ok(bytes.length > 100);
       if (asset.endsWith('.woff2')) { assert.equal(new TextDecoder().decode(bytes.slice(0,4)), 'wOF2'); assert.equal(response.headers.get('content-type'), 'font/woff2'); }

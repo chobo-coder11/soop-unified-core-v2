@@ -20,3 +20,9 @@ test('all characters produce finite motions and frequency changes the walking in
  const a={seed:1,nextMotionAt:0},b={...a};idleMotion(a,0,true,'duck',2);idleMotion(b,0,true,'duck',20);
  assert.ok(b.nextMotionAt>a.nextMotionAt);assert.equal(a.motion,b.motion);
 });
+
+test('all 13 mouth layers are bounded and animate independently of the body',async()=>{
+ const { MOUTHS,mouthMix,mouthGeometry }=await import('../public/mouth.mjs');
+ for(const c of CHARACTERS){assert.ok(MOUTHS[c.id]);const g=mouthGeometry(c,{naturalWidth:1200,naturalHeight:c.rows*300},{x:30,y:30,w:260,h:260},160);for(const rect of [g.source,g.target]){for(const v of Object.values(rect))assert.ok(Number.isFinite(v));assert.ok(rect.w>0&&rect.h>0);}assert.ok(g.target.w<160*.25);}
+ const values=Array.from({length:100},(_,i)=>mouthMix(i*17,0,3));assert.ok(values.some(v=>v>.5));assert.ok(values.some(v=>v===0));assert.ok(values.every(v=>v>=0&&v<=1));assert.equal(mouthMix(300,0,0,false),0);
+});

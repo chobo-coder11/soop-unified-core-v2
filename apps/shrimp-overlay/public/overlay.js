@@ -1,3 +1,4 @@
+import { mouthMix, mouthGeometry } from './mouth.mjs';
 import { characterInfo, renderResolution, textureResolution } from './characters.mjs';
 import { EmoteLayer } from './emotes.mjs';
 import { FrameCache, FrameMeter } from './rendering.mjs';
@@ -50,6 +51,26 @@ function drawFrame(img, index, size, h, hue, nextIndex = index, mix = 0) {
   g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
   ctx.drawImage(blendSurface, -size / 2, h / 2 - size, size, size);
 }
+function drawMouth(img, info, size, hue, amount) {
+  if (amount<=0) return;
+  const frame=frameBounds.get(img)?.[0]; if(!frame)return;
+  const pixels=textureResolution(size,village.settings.renderQuality,window.devicePixelRatio||1);
+  const key=`mouth:${img.src}:${pixels}:${hue}`, geometry=mouthGeometry(info,img,frame,pixels);
+  let patch=textureCache.get(key);
+  if(!patch) {
+    const t=geometry.target,src=geometry.source;
+    patch=document.createElement('canvas');patch.width=Math.max(1,Math.ceil(t.w));patch.height=Math.max(1,Math.ceil(t.h));
+    const g=patch.getContext('2d');
+    g.filter=`brightness(${(village.settings.characterBrightness??114)/100}) saturate(1.08)${hue ? ` hue-rotate(${hue}deg)` : ''}`;
+    g.drawImage(img,src.x,src.y,src.w,src.h,0,0,patch.width,patch.height);
+    g.filter='none';g.globalCompositeOperation='destination-in';
+    g.save();g.scale(patch.width/2,patch.height/2);g.translate(1,1);
+    const mask=g.createRadialGradient(0,0,0,0,0,1);mask.addColorStop(.72,'rgba(0,0,0,1)');mask.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=mask;g.fillRect(-1,-1,2,2);g.restore();
+    textureCache.put(key,patch,patch.width*patch.height*4);
+  }
+  const t=geometry.target,ratio=size/pixels;
+  ctx.save();ctx.globalAlpha*=amount;ctx.drawImage(patch,-size/2+t.x*ratio,-size/2+t.y*ratio,t.w*ratio,t.h*ratio);ctx.restore();
+}
 let characterImages = null, requestedCharacter = '', loadGeneration = 0;
 function loadCharacter(id) {
   const info = characterInfo(id); if (requestedCharacter === info.id) return;
@@ -99,7 +120,7 @@ function resize() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); village.resize(innerWidth, innerHeight);
 }
 addEventListener('resize', resize); resize();
-function font(size, weight = village.settings.fontWeight === 'bold' ? 700 : 400) { return village.settings.fontFamily !== 'system' ? `400 ${size}px ${village.settings.fontFamily === "gaegu" ? "Gaegu" : "Jua"}, "Malgun Gothic", "Segoe UI Emoji", "Apple Color Emoji", sans-serif` : `${weight} ${size}px "Malgun Gothic", "Apple SD Gothic Neo", "Segoe UI Emoji", "Apple Color Emoji", sans-serif`; }
+function font(size, weight = village.settings.fontWeight === 'bold' ? 700 : 400) { return village.settings.fontFamily !== 'system' ? `${weight} ${size}px ${village.settings.fontFamily === "gaegu" ? "Gaegu" : "Jua"}, "Malgun Gothic", "Segoe UI Emoji", "Apple Color Emoji", sans-serif` : `${weight} ${size}px "Malgun Gothic", "Apple SD Gothic Neo", "Segoe UI Emoji", "Apple Color Emoji", sans-serif`; }
 const textCache = new FrameCache(128*1024), widthCache = new FrameCache(64*1024);
 function textWidth(text) { const key=ctx.font+'|'+text; let w=widthCache.get(key); if (w === undefined) w=widthCache.put(key,ctx.measureText(text).width,key.length*2+16); return w; }
 function wrap(text, maxWidth, maxLines) {
@@ -151,6 +172,7 @@ function sprite(a, now, ambient = false) {
     // The second walking pose faces the other way in the atlas; normalize it.
     if (kind === 'shrimp' && motion.pose === 2) ctx.scale(-1, 1);
     drawFrame(poses, motion.pose, s, h, hue, motion.nextPose, motion.poseMix);
+    if(motion.mode==='talk') drawMouth(poses,info,s,hue,mouthMix(now,a.reactionAt??a.lastChat,a.seed,village.settings.extraMotion!==false));
   }
   ctx.restore();
   if (motion.effect && village.settings.extraMotion !== false) {

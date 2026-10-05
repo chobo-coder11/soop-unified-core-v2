@@ -61,8 +61,10 @@ export function visualMotion(a, now, enabled = true, character = 'shrimp') {
     const gait = {waddle:[1.8,.022],hop:[3.2,.015],hover:[1.2,.012],swim:[.8,.025],heavy:[.9,.009],scoot:[.55,.018],sway:[1,.025]}[profile] || [1.3,.012];
     bob = (profile === 'hover' ? -5-Math.sin(a.phase)*gait[0] : -Math.abs(Math.sin(a.phase))*gait[0])*strength; rotation=Math.sin(a.phase)*gait[1]*strength;
   } else if (mode === 'talk') {
-    nextPose = POSES.talk; poseMix = (.5 + .5 * Math.sin(since/190)) * .65 * smooth(since/220);
-    bob = Math.sin(since/240) * .65; sx = 1 + Math.sin(since/240) * .009; sy = 2-sx;
+    // Hold the speaking artwork: oscillating between differently shaped frames
+    // made the entire character appear to inflate and deflate.
+    pose = POSES.idle; nextPose = POSES.idle; poseMix = 0;
+    bob = 0;
   } else if (mode === 'wave') {
     nextPose = POSES.wave; poseMix = envelope * (.7 + .3*Math.sin(since/160)); rotation = Math.sin(since/180)*.025*envelope; effect='hello';
   } else if (mode === 'laugh') {

@@ -36,7 +36,7 @@ function renderLog() {
     const row = document.createElement('div'); row.className = 'chat-row';
     const name = document.createElement('strong'); name.textContent = chat.nickname;
     const tag = document.createElement('span'); tag.className = 'chat-tag'; tag.textContent = chat.source === 'live' ? 'LIVE' : chat.source === 'demo' ? '미리보기' : '테스트';
-    const message = document.createElement('p'); message.textContent = chat.message;
+    const message = document.createElement('p'); message.textContent = chat.message || (chat.emoticon ? '[OGQ 이모티콘]' : '');
     row.append(name, tag, message); box.append(row);
   }
 }

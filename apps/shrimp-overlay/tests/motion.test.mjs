@@ -56,3 +56,10 @@ test('idle variety waits for deceleration and chat reaction plays once', async (
     assert.equal(start.sx,1);assert.equal(end.sx,1);
   }
 });
+
+test('ordinary chat keeps a stable speaking pose and body scale throughout the bubble',()=>{
+ const a={talking:true,reaction:'talk',reactionAt:0,velocity:0,phase:0};
+ for(let now=0;now<=12000;now+=17) {
+  const m=visualMotion(a,now);assert.equal(m.pose,0);assert.equal(m.nextPose,0);assert.equal(m.poseMix,0);assert.equal(m.sx,1);assert.equal(m.sy,1);assert.equal(m.bob,0);
+ }
+});
