@@ -1,18 +1,24 @@
+import { ogqEmote } from '../public/emotes.mjs';
 import { EventEmitter } from 'node:events';
 import WebSocket from '../vendor/ws/wrapper.mjs';
 
 export function normalizeChat(envelope, streamerId, now = Date.now()) {
   if (envelope?.type !== 'event' || !envelope.event) return null;
   const e = envelope.event;
-  if (e.type !== 'CHAT_MESSAGE' || e.streamerId !== streamerId || typeof e.message !== 'string' || !e.message.trim()) return null;
+  const isOgq = e.type === 'OGQ_EMOTICON';
+  if (!['CHAT_MESSAGE','OGQ_EMOTICON'].includes(e.type) || e.streamerId !== streamerId) return null;
+  const emoticon = isOgq ? ogqEmote(e.payload) : null;
+  const message = typeof e.message === 'string' ? e.message.trim() : '';
+  if (!message && !emoticon) return null;
+  const sender = e.user || (isOgq ? { id: e.payload?.userInfo, nickname: e.payload?.color } : {});
   const at = Date.parse(e.receivedAt);
   // Replays recover brief interruptions, but must not flood the screen with old conversation.
   if (Number.isFinite(at) && now - at > 20000) return null;
-  const userId = typeof e.user?.id === 'string' ? e.user.id.trim() : '';
-  const nickname = typeof e.user?.nickname === 'string' ? e.user.nickname.trim() : '';
+  const userId = typeof sender.id === 'string' ? sender.id.trim() : '';
+  const nickname = typeof sender.nickname === 'string' ? sender.nickname.trim() : '';
   if (!userId && !nickname) return null;
   return { id: String(e.id || `${streamerId}:${envelope.seq}`), userId: userId || `nickname:${nickname}`,
-    nickname: (nickname || userId).slice(0, 48), message: e.message.slice(0, 300),
+    nickname: (nickname || userId).slice(0, 48), message: (message || 'OGQ 이모티콘').slice(0, 300), ...(emoticon ? { emoticon } : {}),
     streamerId, at: now, source: 'live' };
 }
 
@@ -68,7 +74,7 @@ export class CoreBridge extends EventEmitter {
     if (m.type === 'hello') {
       if (m.protocol !== 4) { this.stop(false); this.setStatus('error', '지원하지 않는 코어 프로토콜', 'SOOP Unified Core v2.6 / WS protocol 4를 사용해 주세요.'); return; }
       if (this.cursor !== null && m.currentSeq < this.cursor) { this.cursor = null; this.seen.clear(); }
-      this.send(ws, { action: 'subscribe', streamers: [this.settings.streamerId], events: ['CHAT_MESSAGE', 'connection', 'moderation'] });
+      this.send(ws, { action: 'subscribe', streamers: [this.settings.streamerId], events: ['CHAT_MESSAGE', 'OGQ_EMOTICON', 'connection', 'moderation'] });
     } else if (m.type === 'subscribed') {
       this.attempt = 0;
       if (this.cursor !== null) this.send(ws, { action: 'resume', fromSeq: this.cursor });

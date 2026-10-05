@@ -59,7 +59,7 @@ export function decodePacket(streamerId:string,p:ParsedPacket,source:'native'|'r
   case 105:e.user={id:a[2],nickname:a[3]};e.target={id:a[1]};e.donation={kind:'video_balloon',amount:n(a[4]),fanOrder:n(a[5]),extra:{chatNo:a[0],isTopFan:n(a[6]),relay:a[7],fileName:a[8],isDefault:a[9],extraData:a[10]}};break;
   case 107:e.user={id:a[1],nickname:a[2]};e.target={id:a[0]};e.donation={kind:'station_adcon',amount:n(a[3]),extra:{isDefault:a[4],message:a[5],chatNumber:a[6]}};break;
   case 108:e.user={id:a[0],nickname:a[1]};e.target={id:a[2],nickname:a[3]};e.donation={kind:'subscription_gift',itemCode:a[7],extra:{subscriptionId:a[4],subscriptionNickname:a[5],itemType:n(a[6]),isSubscription:n(a[8]),subscriptionType:a[9],subscriptionPeriod:a[10],subscriptionRemain:n(a[11]),subscriptionPaycount:n(a[12])}};break;
-  case 109:e.message=a[1];e.payload={chatNo:a[0],message:a[1],groupId:a[2],subId:a[3],version:a[4],userInfo:a[5],color:a[6],chatLang:a[7],type:a[8]};break;
+  case 109:e.message=a[1];e.user={id:a[5],nickname:a[6]};e.payload={chatNo:a[0],message:a[1],groupId:a[2],subId:a[3],version:a[4],userInfo:a[5],color:a[6],chatLang:a[7],type:a[8]};break;
   case 111:e.target={id:a[0]};e.payload={dropsName:a[1],dropsMsg:a[2],dropsImgUrl:a[3]};break;
   case 118:e.user={id:a[0],nickname:a[1]};e.target={id:a[2],nickname:a[3]};e.donation={kind:'ogq_emoticon_gift',extra:{title:a[4],imageUrl:a[5]}};break;
   case 119:e.payload={data:j(a[0])};break;
@@ -72,3 +72,4 @@ export function decodePacket(streamerId:string,p:ParsedPacket,source:'native'|'r
  }
  return e;
 }
+

@@ -31,7 +31,7 @@ export function moveAgent(a, now, dt, { speed, size, width }, paused = false) {
   const distance = (old + a.velocity) / 2 * dt;
   a.x = Math.max(margin, Math.min(width - margin, a.x + distance));
   // Step phase is tied to distance travelled, so feet do not run while sliding slowly.
-  a.phase += Math.abs(distance) / Math.max(12, size * .32) * Math.PI * 2;
+  a.phase += Math.abs(distance) / Math.max(12, size * .17) * Math.PI * 2;
   if (a.pendingTurn && Math.abs(a.velocity) < .1) { a.pendingTurn = false; a.dir *= -1; a.turnUntil = now + 240; }
 }
 export function visualMotion(a, now, enabled = true) {
@@ -41,11 +41,19 @@ export function visualMotion(a, now, enabled = true) {
   const since = Math.max(0, now - (talking ? a.reactionAt ?? a.lastChat : a.motionStarted ?? a.born ?? 0));
   const beat = Math.floor(since / 240) % 2;
   let pose = POSES.idle, bob = 0, rotation = 0, sx = 1, sy = 1, effect = '';
-  if (mode === 'walk') { pose = Math.floor(a.phase / Math.PI * 2) % 2 ? POSES.walkA : POSES.walkB; bob = 0; rotation = 0; }
+  if (mode === 'walk') {
+    pose = Math.floor(a.phase / Math.PI * 2) % 2 ? POSES.walkA : POSES.walkB;
+    const strength = Math.min(1, Math.abs(a.velocity || 0) / 20);
+    bob = -Math.abs(Math.sin(a.phase)) * 1.3 * strength;
+    rotation = Math.sin(a.phase) * .012 * strength;
+  }
   else if (mode === 'talk') { pose = beat ? POSES.talk : POSES.idle; bob = Math.sin(since / 130) * 1.1; sx = 1 + Math.sin(since / 130) * .018; sy = 2 - sx; }
   else if (mode === 'wave') { pose = beat ? POSES.wave : POSES.idle; rotation = Math.sin(since / 140) * .06; effect = 'hello'; }
   else if (mode === 'laugh') { pose = beat ? POSES.laugh : POSES.jump; bob = -Math.abs(Math.sin(since / 120)) * 4; rotation = Math.sin(since / 95) * .05; effect = 'sparkle'; }
   else if (mode === 'jump') { pose = POSES.jump; const t = (since % 850) / 850; bob = -Math.sin(t * Math.PI) * 24; sy = t < .1 || t > .9 ? .92 : 1.03; sx = 2 - sy; effect = 'sparkle'; }
   else if (mode === 'sleep') { pose = POSES.sleep; sy = 1 + Math.sin(since / 480) * .02; effect = 'sleep'; }
-  return { mode, pose, walkFrame: Math.floor(a.phase / (Math.PI * 2) * 4) % 4, bob, rotation, sx, sy, effect, faceForward: talking || mode !== 'walk' };
+  const framePhase = ((a.phase / (Math.PI * 2) * 4) % 4 + 4) % 4;
+  const walkFrame = Math.floor(framePhase), fraction = framePhase - walkFrame;
+  const walkMix = fraction * fraction * (3 - 2 * fraction);
+  return { mode, pose, walkFrame, walkNextFrame: (walkFrame + 1) % 4, walkMix, bob, rotation, sx, sy, effect, faceForward: talking || mode !== 'walk' };
 }

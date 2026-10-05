@@ -1,5 +1,8 @@
+import { EmoteLayer } from './emotes.mjs';
+import { FrameCache, FrameMeter } from './rendering.mjs';
 import { Village } from './model.mjs';
 import { visualMotion, idleMotion, moveAgent } from './motion.mjs';
+const emoteLayer = new EmoteLayer(document.querySelector('#emote-layer'));
 const canvas = document.querySelector('#village');
 const ctx = canvas.getContext('2d', { alpha: true });
 const image = new Image(); image.src = '/assets/shrimp.png';
@@ -20,12 +23,33 @@ function prepareFrames(img) {
     frameBounds.set(img, frames);
   });
 }
-function drawFrame(img, index, size, h) {
-  const frame = frameBounds.get(img)?.[index];
-  if (!frame) return;
-  const scale = Math.min(size / frame.w, size * .9 / frame.h);
-  const w = frame.w * scale, height = frame.h * scale;
-  ctx.drawImage(img, frame.x, frame.y, frame.w, frame.h, -w / 2, h / 2 - height, w, height);
+const textureCache = new FrameCache();
+const blendSurface = document.createElement('canvas');
+let blendContext = blendSurface.getContext('2d');
+function frameTexture(img, index, size, hue) {
+  const frame = frameBounds.get(img)?.[index]; if (!frame) return null;
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5), pixels = Math.ceil(size * dpr);
+  const key = `${img === walkAtlas ? 'walk' : 'pose'}:${index}:${pixels}:${hue}`;
+  const existing = textureCache.get(key); if (existing) return existing;
+  const tile = document.createElement('canvas'); tile.width = pixels; tile.height = pixels;
+  const g = tile.getContext('2d');
+  const scale = Math.min(pixels / frame.w, pixels * .9 / frame.h), w = frame.w * scale, h = frame.h * scale;
+  g.filter = hue ? `hue-rotate(${hue}deg)` : 'none';
+  g.drawImage(img, frame.x, frame.y, frame.w, frame.h, (pixels - w) / 2, pixels - h, w, h);
+  return textureCache.put(key, tile, pixels * pixels * 4);
+}
+function drawFrame(img, index, size, h, hue, nextIndex = index, mix = 0) {
+  const first = frameTexture(img, index, size, hue); if (!first) return;
+  if (mix <= 0 || index === nextIndex) { ctx.drawImage(first, -size / 2, h / 2 - size, size, size); return; }
+  const next = frameTexture(img, nextIndex, size, hue); if (!next) return;
+  if (blendSurface.width !== first.width) { blendSurface.width = first.width; blendSurface.height = first.height; blendContext = blendSurface.getContext('2d'); }
+  const g = blendContext; g.clearRect(0,0,blendSurface.width,blendSurface.height);
+  // Weighted premultiplied-alpha addition on a transparent offscreen surface.
+  // Ordinary source-over blending would make the character flicker translucent.
+  g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1 - mix; g.drawImage(first,0,0);
+  g.globalCompositeOperation = 'lighter'; g.globalAlpha = mix; g.drawImage(next,0,0);
+  g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+  ctx.drawImage(blendSurface, -size / 2, h / 2 - size, size, size);
 }
 const atlas = new Image(); prepareFrames(atlas); atlas.src = '/assets/shrimp-poses.png';
 const walkAtlas = new Image(); prepareFrames(walkAtlas); walkAtlas.src = '/assets/shrimp-walk.png';
@@ -36,13 +60,16 @@ Promise.all([document.fonts.load('20px Jua'), document.fonts.load('20px Gaegu')]
 const ambientAgents = [];
 const defaults = { size: 108, speed: 28, maxCharacters: 24, maxBubbles: 5, ambientCharacters: 6, bubbleSeconds: 5, idleMinutes: 5, bottom: 20, fontSize: 19, showNames: 'speaking', palette: 'pastel' };
 const village = new Village(defaults);
+const frameMeter = new FrameMeter();
+let lastDiagnostics = -Infinity, previewPaused = false, lastPaintTop = 0;
+addEventListener('message', event => { if (preview && event.source === parent && event.origin === location.origin && event.data?.type === 'shrimp-preview-visibility') { previewPaused = !event.data.visible; previous = performance.now(); frameMeter.reset(); } });
 let status = 'idle', preview = new URLSearchParams(location.search).has('preview'), loaded = false, previous = performance.now();
 const connection = new EventSource('/events');
 connection.addEventListener('snapshot', e => {
   const data = JSON.parse(e.data); village.configure(data.settings); status = data.status.state;
   village.clear(); for (const chat of data.recent) village.chat(chat, performance.now()); loaded = true;
 });
-connection.addEventListener('settings', e => { village.configure(JSON.parse(e.data)); });
+connection.addEventListener('settings', e => { textureCache.clear(); village.configure(JSON.parse(e.data)); });
 connection.addEventListener('filter', e => village.configure(JSON.parse(e.data)));
 connection.addEventListener('chat', e => { village.chat(JSON.parse(e.data), performance.now()); });
 connection.addEventListener('clear', () => village.clear());
@@ -53,10 +80,11 @@ function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.round(innerWidth * dpr); canvas.height = Math.round(innerHeight * dpr);
   canvas.style.width = innerWidth + 'px'; canvas.style.height = innerHeight + 'px';
+  lastPaintTop = 0; textureCache.clear();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); village.resize(innerWidth, innerHeight);
 }
 addEventListener('resize', resize); resize();
-function font(size, weight = village.settings.fontWeight === 'bold' ? 700 : 400) { return village.settings.fontFamily !== 'system' ? `400 ${size}px ${village.settings.fontFamily === "gaegu" ? "Gaegu" : "Jua"}, "Malgun Gothic", sans-serif` : `${weight} ${size}px "Malgun Gothic", "Apple SD Gothic Neo", sans-serif`; }
+function font(size, weight = village.settings.fontWeight === 'bold' ? 700 : 400) { return village.settings.fontFamily !== 'system' ? `400 ${size}px ${village.settings.fontFamily === "gaegu" ? "Gaegu" : "Jua"}, "Malgun Gothic", "Segoe UI Emoji", "Apple Color Emoji", sans-serif` : `${weight} ${size}px "Malgun Gothic", "Apple SD Gothic Neo", "Segoe UI Emoji", "Apple Color Emoji", sans-serif`; }
 function wrap(text, maxWidth, maxLines) {
   const lines = []; let line = '';
   for (const ch of text.replace(/\r/g, '')) {
@@ -71,6 +99,12 @@ function wrap(text, maxWidth, maxLines) {
   if (line || !lines.length) lines.push(line); return lines;
 }
 function measure(chat, maximum) {
+  if (chat.emoticon) {
+    const asset = emoteLayer.asset(chat.emoticon);
+    if (!asset.ready) return { pending: true };
+    const pad = village.settings.bubblePadding ?? 16, size = Math.min(village.settings.emoteSize || 88, maximum - pad * 2);
+    return { w: Math.max(120, size + pad * 2), h: size + pad * 2, lines: [] };
+  }
   ctx.font = font(village.settings.fontSize);
   const lines = wrap(chat.message, maximum - (village.settings.bubblePadding ?? 16) * 2, village.settings.bubbleMaxLines || 4);
   const w = Math.max(Math.min(120, maximum), Math.min(maximum, Math.max(...lines.map(l => ctx.measureText(l).width)) + (village.settings.bubblePadding ?? 16) * 2));
@@ -89,16 +123,15 @@ function sprite(a, now, ambient = false) {
   if (!useWalk && !motion.faceForward) ctx.scale(a.dir > 0 ? -1 : 1, 1);
   ctx.rotate(motion.rotation); ctx.scale(motion.sx, motion.sy);
   const hue = village.settings.palette === 'pastel' ? [0, 330, 18, 160, 285, 45][a.seed % 6] : 0;
-  ctx.filter = `hue-rotate(${hue}deg)`;
+  ctx.filter = 'none';
   ctx.globalAlpha = ambient ? (preview ? .8 : 1) : Math.min(1, (now - a.born) / 450);
   if (useWalk) {
-    const cw = walkAtlas.naturalWidth / 4, ch = walkAtlas.naturalHeight / 2;
-    drawFrame(walkAtlas, motion.walkFrame + (a.dir > 0 ? 0 : 4), s, h);
+    const row = a.dir > 0 ? 0 : 4;
+    drawFrame(walkAtlas, motion.walkFrame + row, s, h, hue, motion.walkNextFrame + row, motion.walkMix);
   } else if (useAtlas) {
-    const cw = atlas.naturalWidth / 4, ch = atlas.naturalHeight / 2;
     // The second walking pose faces the other way in the atlas; normalize it.
     if (motion.pose === 2) ctx.scale(-1, 1);
-    drawFrame(atlas, motion.pose, s, h);
+    drawFrame(atlas, motion.pose, s, h, hue);
   } else ctx.drawImage(image, -s / 2, -h / 2, s, h);
   ctx.restore();
   if (motion.effect && village.settings.extraMotion !== false) {
@@ -140,13 +173,22 @@ function drawBubble(b, now) {
   ctx.beginPath(); ctx.moveTo(anchor - 7, b.y + b.h - 1); ctx.lineTo(a.x, tipY); ctx.lineTo(anchor + 7, b.y + b.h - 1); ctx.fill();
   if (c.bubbleBorderWidth) { ctx.beginPath(); ctx.moveTo(anchor - 7, b.y + b.h); ctx.lineTo(a.x, tipY); ctx.lineTo(anchor + 7, b.y + b.h); ctx.stroke(); }
   ctx.fillStyle = c.bubbleTextColor || '#59434d'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  lines.forEach((line, i) => ctx.fillText(line, b.x + padding, b.y + padding + i * (c.fontSize + 7)));
+  if (b.chat.emoticon) {
+    const size = Math.min(c.emoteSize || 88, b.w - padding * 2);
+    const displayed = emoteLayer.draw(b.key, b.chat.emoticon, { x: b.x + (b.w - size) / 2, y: b.y + padding, size, opacity: ctx.globalAlpha });
+    if (!displayed) { ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = font(Math.min(16, c.fontSize)); ctx.fillText('이모티콘 로드 실패', b.x + b.w / 2, b.y + b.h / 2, b.w - padding * 2); }
+  } else lines.forEach((line, i) => ctx.fillText(line, b.x + padding, b.y + padding + i * (c.fontSize + 7)));
   ctx.restore();
 }
 function render(now) {
+  if (preview && (previewPaused || document.hidden)) { previous = now; frameMeter.reset(); requestAnimationFrame(render); return; }
+  const drawStarted = performance.now();
   const dt = Math.min(.05, Math.max(0, (now - previous) / 1000)); previous = now;
-  ctx.clearRect(0, 0, village.width, village.height);
   village.step(now, dt, measure);
+  const paintTop = Math.max(0, Math.min(village.characterBase() - village.settings.size - 64, ...village.bubbles.map(b => b.y - 48)));
+  const clearTop = Math.min(lastPaintTop, paintTop);
+  ctx.clearRect(0, clearTop, village.width, village.height - clearTop);
+  lastPaintTop = paintTop;
   const ambientCount = loaded ? Math.max(0, Math.min(village.settings.ambientCharacters, village.settings.maxCharacters) - village.agents.size) : 0;
   for (let i = 0; i < ambientCount; i++) {
     const margin = village.settings.size / 2, span = Math.max(1, village.width - margin * 2);
@@ -158,10 +200,17 @@ function render(now) {
   }
   for (const a of village.agents.values()) sprite(a, now);
   for (const b of village.bubbles) drawBubble(b, now);
+  emoteLayer.retain(new Set(village.bubbles.filter(b => b.chat.emoticon).map(b => b.key)));
   // Read-only diagnostics used for testing; no chat DOM injection or HTML rendering.
-  window.overlayStats = { characters: village.agents.size, ambientCharacters: ambientCount, bubbles: village.bubbles.length, queued: village.queue.size, dropped: village.dropped, status,
+  frameMeter.sample(now, performance.now() - drawStarted);
+  if (now - lastDiagnostics >= 500) {
+  lastDiagnostics = now;
+  const performanceStats = frameMeter.snapshot();
+  window.overlayStats = { characters: village.agents.size, ambientCharacters: ambientCount, bubbles: village.bubbles.length, queued: village.queue.size, dropped: village.dropped, status, ...performanceStats, textureCacheBytes: textureCache.bytes,
     agents: [...village.agents.values()].map(a => ({ userId: a.userId, nickname: a.nickname, x: a.x, talking: a.talking })),
     boxes: village.bubbles.map(b => ({ x: b.x, y: b.y, w: b.w, h: b.h, nickname: b.chat.nickname, message: b.chat.message })) };
+  if (preview) parent.postMessage({ type: 'shrimp-performance', ...performanceStats }, location.origin);
+  }
   requestAnimationFrame(render);
 }
 requestAnimationFrame(render);

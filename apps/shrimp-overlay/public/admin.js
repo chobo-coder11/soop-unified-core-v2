@@ -1,6 +1,6 @@
 const $ = id => document.getElementById(id);
 let token = '', settings = {}, count = 0, recent = [], busy = false;
-const numeric = ['size', 'speed', 'maxCharacters', 'maxBubbles', 'bubbleSeconds', 'fontSize', 'bottom', 'idleMinutes', 'ambientCharacters', 'bubbleMaxWidth', 'bubbleMaxLines', 'bubblePadding', 'bubbleRadius', 'bubbleBorderWidth', 'bubbleGap', 'bubbleOpacity', 'nameFontSize', 'namePaddingX', 'namePaddingY', 'nameRadius', 'nameBorderWidth', 'nameGap', 'nameMaxWidth', 'nameOpacity'];
+const numeric = ['emoteSize', 'size', 'speed', 'maxCharacters', 'maxBubbles', 'bubbleSeconds', 'fontSize', 'bottom', 'idleMinutes', 'ambientCharacters', 'bubbleMaxWidth', 'bubbleMaxLines', 'bubblePadding', 'bubbleRadius', 'bubbleBorderWidth', 'bubbleGap', 'bubbleOpacity', 'nameFontSize', 'namePaddingX', 'namePaddingY', 'nameRadius', 'nameBorderWidth', 'nameGap', 'nameMaxWidth', 'nameOpacity'];
 function toast(text, error = false) { const el = $('toast'); el.textContent = text; el.className = error ? 'error' : ''; el.hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => { el.hidden = true; }, 4500); }
 function showStatus(status) { const el = $('connection-pill'); el.dataset.state = status.state; el.querySelector('span').textContent = status.label; $('status-detail').textContent = status.detail || status.label; }
 function ranges() { for (const key of numeric) { const unit = ({ maxCharacters: "마리", maxBubbles: "개", bubbleSeconds: "초", idleMinutes: "분", ambientCharacters: "마리", bubbleMaxLines: "줄", bubbleOpacity: "%", nameOpacity: "%", speed: "" })[key] ?? "px"; document.querySelector(`output[for="${key}"]`).textContent = $(key).value + unit; } }
@@ -71,3 +71,15 @@ events.addEventListener('notice', e => toast(JSON.parse(e.data).message));
 events.addEventListener('clear', () => { recent = []; renderLog(); });
 events.addEventListener('hide-user', e => { const { userId } = JSON.parse(e.data); recent = recent.filter(c => c.userId !== userId); renderLog(); });
 events.onerror = () => showStatus({ state: 'error', label: '프로그램 연결 끊김', detail: '프로그램이 켜져 있는지 확인해 주세요. 자동으로 다시 연결합니다.' });
+
+addEventListener('message', event => {
+  if (event.origin !== location.origin || event.source !== $('preview').contentWindow || event.data?.type !== 'shrimp-performance') return;
+  const { fps, drawMs } = event.data;
+  $('performance-label').textContent = fps > 0 ? `미리보기 ${fps}fps · 그리기 ${drawMs}ms` : 'FPS 측정 중';
+});
+new IntersectionObserver(entries => {
+  $('preview').contentWindow.postMessage({ type: 'shrimp-preview-visibility', visible: entries[0].isIntersecting }, location.origin);
+}, { threshold: 0 }).observe($('preview'));
+
+$('test-ogq-static').addEventListener('click', () => action(() => api('/api/test-ogq', { nickname: $('testNickname').value, animated: false })));
+$('test-ogq-animated').addEventListener('click', () => action(() => api('/api/test-ogq', { nickname: $('testNickname').value, animated: true })));

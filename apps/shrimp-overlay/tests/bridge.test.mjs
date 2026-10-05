@@ -23,6 +23,7 @@ test('protocol-4 auth, dedupe, seq jumps, explicit gap replay, reconnect and sto
     ws.on('message', raw => {
       const m = JSON.parse(raw); commands.push(m);
       if (m.action === 'subscribe') {
+        assert.ok(m.events.includes('OGQ_EMOTICON'));
         ws.send(JSON.stringify({ type: 'subscribed', currentSeq: connections === 1 ? 20 : 29 }));
         if (connections === 1) { ws.send(JSON.stringify(event(22))); ws.send(JSON.stringify(event(22))); ws.send(JSON.stringify(event(29))); ws.send(JSON.stringify({ type: 'gap', fromSeq: 23, toSeq: 28 })); }
       } else if (m.action === 'resume') { ws.send(JSON.stringify(event(25))); ws.send(JSON.stringify(event(29))); }

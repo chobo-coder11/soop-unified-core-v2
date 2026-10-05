@@ -20,7 +20,7 @@ test('real server forwards authenticated core chat over SSE; saves settings, fil
   wss.on('connection', (ws, req) => {
     assert.equal(req.headers['x-api-key'], 'private-key'); socket = ws;
     ws.send(JSON.stringify({ type: 'hello', protocol: 4, currentSeq: 0 }));
-    ws.on('message', raw => { const m = JSON.parse(raw); if (m.action === 'subscribe') ws.send(JSON.stringify({ type: 'subscribed', currentSeq: 0 })); });
+    ws.on('message', raw => { const m = JSON.parse(raw); if (m.action === 'subscribe') { assert.ok(m.events.includes('OGQ_EMOTICON')); } if (m.action === 'subscribe') ws.send(JSON.stringify({ type: 'subscribed', currentSeq: 0 })); });
   });
   const url = `http://127.0.0.1:${port}`;
   const start = () => {
@@ -32,8 +32,8 @@ test('real server forwards authenticated core chat over SSE; saves settings, fil
     start(); await waitFor(async () => { try { return (await fetch(url + '/api/state')).ok; } catch { return false; } });
     let state = await fetch(url + '/api/state').then(r => r.json());
     assert.equal(state.service, 'soop-shrimp-overlay');
-    assert.equal(state.version, '1.1.0');
-    for (const asset of ['/assets/shrimp-walk.png','/assets/shrimp-poses.png','/assets/fonts/Jua-Regular.woff2','/assets/fonts/Gaegu-Regular.woff2','/motion.mjs']) {
+    assert.equal(state.version, '1.2.0');
+    for (const asset of ['/assets/shrimp-walk.png','/assets/shrimp-poses.png','/assets/fonts/Jua-Regular.woff2','/assets/fonts/Gaegu-Regular.woff2','/motion.mjs','/rendering.mjs','/emotes.mjs']) {
       const response = await fetch(url + asset); assert.equal(response.status, 200);
       const bytes = new Uint8Array(await response.arrayBuffer()); assert.ok(bytes.length > 100);
       if (asset.endsWith('.woff2')) { assert.equal(new TextDecoder().decode(bytes.slice(0,4)), 'wOF2'); assert.equal(response.headers.get('content-type'), 'font/woff2'); }
@@ -51,7 +51,11 @@ test('real server forwards authenticated core chat over SSE; saves settings, fil
     const emit = (seq, message) => socket.send(JSON.stringify({ type: 'event', seq, event: { id: `chat-${seq}`, streamerId: 'channel', type: 'CHAT_MESSAGE', category: 'chat', user: { id: 'viewer', nickname: '부울경' }, message, receivedAt: new Date().toISOString() } }));
     emit(10, '새우말풍선'); await waitFor(() => received.includes('새우말풍선'));
     emit(11, 'hide-me'); await delay(60); assert.ok(!received.includes('"message":"hide-me"'));
-    socket.send(JSON.stringify({ type: 'event', seq: 12, event: { streamerId: 'channel', type: 'USER_KICKED', category: 'moderation', user: { id: 'viewer' }, moderation: { action: 'kick' } } }));
+    socket.send(JSON.stringify({ type:'event', seq:12, event:{ id:'ogq-integration',streamerId:'channel',type:'OGQ_EMOTICON',category:'chat',message:'',payload:{groupId:'646e3b2843650',subId:'1',userInfo:'viewer',color:'부울경'},receivedAt:new Date().toISOString() } }));
+    await waitFor(() => received.includes('ogq-integration')); assert.ok(received.includes('1.webp'));
+    assert.equal((await post('/api/test-ogq', { nickname:'움티테스트',animated:true })).status,200);
+    await waitFor(() => received.includes('움티테스트'));
+    socket.send(JSON.stringify({ type: 'event', seq: 13, event: { streamerId: 'channel', type: 'USER_KICKED', category: 'moderation', user: { id: 'viewer' }, moderation: { action: 'kick' } } }));
     await waitFor(() => received.includes('event: hide-user'));
     const clean = await fetch(url + '/api/state').then(r => r.text()); assert.ok(!clean.includes('private-key'));
     assert.equal((await post('/api/clear')).status, 200); await waitFor(() => received.includes('event: clear'));

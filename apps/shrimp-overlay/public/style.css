@@ -4,3 +4,5 @@
 .overlay-address .button{flex-shrink:0;white-space:nowrap}.custom-details{margin:20px 0;padding-top:14px;border-top:1px solid #f1ded5}.custom-details summary{cursor:pointer;font-weight:700;margin-bottom:16px}.custom-details input[type=color]{height:38px;width:100%;padding:3px}.preview-stage{min-height:360px}
 
 @font-face{font-family:Gaegu;src:url('/assets/fonts/Gaegu-Regular.woff2') format('woff2');font-display:swap;font-weight:400}
+
+#emote-layer{position:fixed;inset:0;pointer-events:none;overflow:hidden}.ogq-emote{position:absolute;left:0;top:0;object-fit:contain;pointer-events:none;will-change:transform,opacity}

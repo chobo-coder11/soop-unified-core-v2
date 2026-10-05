@@ -1,12 +1,12 @@
 export const DEFAULTS = Object.freeze({
   mode: 'builtin', coreUrl: 'ws://127.0.0.1:17841/v1/ws', apiKey: '', streamerId: '',
-  size: 108, speed: 28, maxCharacters: 24, maxBubbles: 5, ambientCharacters: 6,
+  emoteSize: 88, size: 108, speed: 28, maxCharacters: 24, maxBubbles: 5, ambientCharacters: 6,
   bubbleSeconds: 5, idleMinutes: 5, bottom: 20, fontSize: 19,
   bubbleMaxWidth: 360, bubbleMaxLines: 4, bubblePadding: 16, bubbleRadius: 20, bubbleBorderWidth: 2, bubbleGap: 10, bubbleOpacity: 100, nameFontSize: 18, namePaddingX: 12, namePaddingY: 5, nameRadius: 12, nameBorderWidth: 1, nameGap: 2, nameMaxWidth: 200, nameOpacity: 100,
   bubbleBg: '#fff9f4', bubbleTextColor: '#59434d', bubbleBorder: '#efc4b5', nameBg: '#fff3e9', nameTextColor: '#815b58', nameBorder: '#ecc4b3', namePosition: 'below', fontWeight: 'normal',
   showNames: 'speaking', palette: 'pastel', fontFamily: 'jua', extraMotion: true, blockedUsers: [], bannedWords: []
 });
-const ranges = { bubbleMaxWidth: [120, 600], bubbleMaxLines: [1, 6], bubblePadding: [8, 32], bubbleRadius: [0, 40], bubbleBorderWidth: [0, 6], bubbleGap: [4, 40], bubbleOpacity: [20, 100], nameFontSize: [10, 36], namePaddingX: [0, 24], namePaddingY: [0, 16], nameRadius: [0, 30], nameBorderWidth: [0, 6], nameGap: [0, 32], nameMaxWidth: [60, 400], nameOpacity: [20, 100], size: [56, 240], speed: [8, 90], maxCharacters: [4, 48], maxBubbles: [1, 8], ambientCharacters: [0, 12],
+const ranges = { emoteSize: [32, 160], bubbleMaxWidth: [120, 600], bubbleMaxLines: [1, 6], bubblePadding: [8, 32], bubbleRadius: [0, 40], bubbleBorderWidth: [0, 6], bubbleGap: [4, 40], bubbleOpacity: [20, 100], nameFontSize: [10, 36], namePaddingX: [0, 24], namePaddingY: [0, 16], nameRadius: [0, 30], nameBorderWidth: [0, 6], nameGap: [0, 32], nameMaxWidth: [60, 400], nameOpacity: [20, 100], size: [56, 240], speed: [8, 90], maxCharacters: [4, 48], maxBubbles: [1, 8], ambientCharacters: [0, 12],
   bubbleSeconds: [2, 12], idleMinutes: [1, 60], bottom: [0, 240], fontSize: [12, 42] };
 export function normalizeSettings(input, previous = DEFAULTS) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('설정 형식이 올바르지 않습니다.');

@@ -33,6 +33,7 @@ export class Village {
     const active = this.bubbles.find(b => b.key === key);
     if (active) {
       // Each viewer owns one bubble; cap extension so continuous typing cannot monopolize a slot.
+      active.layoutDirty = Boolean(active.chat.emoticon) !== Boolean(chat.emoticon);
       active.chat = chat; active.until = Math.min(active.started + this.settings.bubbleSeconds * 2000, now + this.settings.bubbleSeconds * 1000);
     } else { this.queue.set(key, { ...chat, queuedAt: now }); }
     while (this.queue.size > 160) { this.queue.delete(this.queue.keys().next().value); this.dropped++; }
@@ -47,7 +48,8 @@ export class Village {
   }
   clear() { this.agents.clear(); this.queue.clear(); this.bubbles = []; }
   step(now, dt, measure) {
-    this.bubbles = this.bubbles.filter(b => b.until > now && this.agents.has(b.key));
+    for (const b of this.bubbles) if (b.layoutDirty) this.queue.set(b.key, { ...b.chat, queuedAt: now });
+    this.bubbles = this.bubbles.filter(b => !b.layoutDirty && b.until > now && this.agents.has(b.key));
     for (const [key, chat] of this.queue) if (now - chat.queuedAt > 12000 || !this.agents.has(key)) { this.queue.delete(key); this.dropped++; }
     for (const a of this.agents.values()) {
       if (now - a.lastChat > this.settings.idleMinutes * 60000) { this.agents.delete(a.key); this.queue.delete(a.key); continue; }
@@ -62,6 +64,7 @@ export class Village {
       if (this.bubbles.length >= this.settings.maxBubbles) break;
       const a = this.agents.get(key); if (!a || Math.abs(a.velocity || 0) > .4) continue;
       const measured = measure(chat, Math.min(this.settings.bubbleMaxWidth || 360, this.width - 24));
+      if (measured.pending) continue;
       const rect = this.findSpace(a.x, measured);
       if (!rect) continue;
       this.bubbles.push({ key, chat, ...rect, lines: measured.lines, until: now + this.settings.bubbleSeconds * 1000, started: now });
