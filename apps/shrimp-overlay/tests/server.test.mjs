@@ -32,6 +32,12 @@ test('real server forwards authenticated core chat over SSE; saves settings, fil
     start(); await waitFor(async () => { try { return (await fetch(url + '/api/state')).ok; } catch { return false; } });
     let state = await fetch(url + '/api/state').then(r => r.json());
     assert.equal(state.service, 'soop-shrimp-overlay');
+    assert.equal(state.version, '1.1.0');
+    for (const asset of ['/assets/shrimp-walk.png','/assets/shrimp-poses.png','/assets/fonts/Jua-Regular.woff2','/assets/fonts/Gaegu-Regular.woff2','/motion.mjs']) {
+      const response = await fetch(url + asset); assert.equal(response.status, 200);
+      const bytes = new Uint8Array(await response.arrayBuffer()); assert.ok(bytes.length > 100);
+      if (asset.endsWith('.woff2')) { assert.equal(new TextDecoder().decode(bytes.slice(0,4)), 'wOF2'); assert.equal(response.headers.get('content-type'), 'font/woff2'); }
+    }
     const post = (route, body = {}) => fetch(url + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shrimp-Token': state.token }, body: JSON.stringify(body) });
     assert.equal((await fetch(url + '/api/test', { method: 'POST', body: '{}' })).status, 403);
     assert.equal((await post('/api/settings', { mode: 'external', coreUrl: `ws://127.0.0.1:${core.address().port}/v1/ws`, apiKey: 'private-key', streamerId: 'channel', bannedWords: ['hide-me'] })).status, 200);

@@ -25,7 +25,7 @@ function broadcast(type, data) {
   for (const res of clients) { if (res.writableLength > 262144) { res.destroy(); clients.delete(res); } else res.write(payload); }
 }
 function snapshot(admin = false) {
-  return { service: 'soop-shrimp-overlay', version: '1.0.0', settings: publicSettings(settings), status: bridge.status, running, demo: Boolean(demo),
+  return { service: 'soop-shrimp-overlay', version: '1.1.0', settings: publicSettings(settings), status: bridge.status, running, demo: Boolean(demo),
     total, recent: recent.filter(x => Date.now() - x.at < 20000), ...(admin ? { token: TOKEN, overlayUrl: `http://127.0.0.1:${PORT}/overlay` } : {}) };
 }
 function clearScene() { recent = []; broadcast('clear', {}); }
