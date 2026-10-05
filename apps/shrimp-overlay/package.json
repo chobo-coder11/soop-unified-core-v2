@@ -1,0 +1,8 @@
+{
+  "name": "soop-shrimp-overlay",
+  "version": "1.6.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.13.0" },
+  "scripts": { "start": "node server.mjs", "test": "node --test tests/*.test.mjs" }
+}
