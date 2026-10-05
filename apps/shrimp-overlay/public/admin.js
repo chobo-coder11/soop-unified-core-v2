@@ -1,19 +1,20 @@
+import { CHARACTERS, characterInfo } from './characters.mjs';
 const $ = id => document.getElementById(id);
 let token = '', settings = {}, count = 0, recent = [], busy = false;
-const numeric = ['emoteSize', 'size', 'speed', 'maxCharacters', 'maxBubbles', 'bubbleSeconds', 'fontSize', 'bottom', 'idleMinutes', 'ambientCharacters', 'bubbleMaxWidth', 'bubbleMaxLines', 'bubblePadding', 'bubbleRadius', 'bubbleBorderWidth', 'bubbleGap', 'bubbleOpacity', 'nameFontSize', 'namePaddingX', 'namePaddingY', 'nameRadius', 'nameBorderWidth', 'nameGap', 'nameMaxWidth', 'nameOpacity'];
+const numeric = ['characterBrightness', 'motionFrequency', 'emoteSize', 'size', 'speed', 'maxCharacters', 'maxBubbles', 'bubbleSeconds', 'fontSize', 'bottom', 'idleMinutes', 'ambientCharacters', 'bubbleMaxWidth', 'bubbleMaxLines', 'bubblePadding', 'bubbleRadius', 'bubbleBorderWidth', 'bubbleGap', 'bubbleOpacity', 'nameFontSize', 'namePaddingX', 'namePaddingY', 'nameRadius', 'nameBorderWidth', 'nameGap', 'nameMaxWidth', 'nameOpacity'];
 function toast(text, error = false) { const el = $('toast'); el.textContent = text; el.className = error ? 'error' : ''; el.hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => { el.hidden = true; }, 4500); }
 function showStatus(status) { const el = $('connection-pill'); el.dataset.state = status.state; el.querySelector('span').textContent = status.label; $('status-detail').textContent = status.detail || status.label; }
-function ranges() { for (const key of numeric) { const unit = ({ maxCharacters: "마리", maxBubbles: "개", bubbleSeconds: "초", idleMinutes: "분", ambientCharacters: "마리", bubbleMaxLines: "줄", bubbleOpacity: "%", nameOpacity: "%", speed: "" })[key] ?? "px"; document.querySelector(`output[for="${key}"]`).textContent = $(key).value + unit; } }
+function ranges() { for (const key of numeric) { const unit = ({ maxCharacters: "마리", maxBubbles: "개", bubbleSeconds: "초", motionFrequency: "초 간격", idleMinutes: "분", ambientCharacters: "마리", bubbleMaxLines: "줄", bubbleOpacity: "%", nameOpacity: "%", characterBrightness:"%", speed: "" })[key] ?? "px"; document.querySelector(`output[for="${key}"]`).textContent = $(key).value + unit; } }
 function toggleMode() { const external = document.querySelector('input[name="mode"]:checked').value === 'external'; $('external-fields').hidden = !external; $('builtin-help').hidden = external; }
 function populate(data) {
   settings = data.settings; token = data.token || token;
-  for (const key of [...numeric, 'streamerId', 'coreUrl', 'showNames', 'palette', 'fontFamily', 'namePosition', 'fontWeight', 'bubbleBg', 'bubbleTextColor', 'bubbleBorder', 'nameBg', 'nameTextColor', 'nameBorder']) $(key).value = settings[key];
+  for (const key of [...numeric, 'streamerId', 'coreUrl', 'showNames', 'palette', 'fontFamily', 'character', 'renderQuality', 'namePosition', 'fontWeight', 'bubbleBg', 'bubbleTextColor', 'bubbleBorder', 'nameBg', 'nameTextColor', 'nameBorder']) $(key).value = settings[key];
   $('extraMotion').checked = settings.extraMotion;
   document.querySelector(`input[name="mode"][value="${settings.mode}"]`).checked = true;
   $('apiKey').value = ''; $('apiKey').placeholder = settings.hasApiKey ? '키 저장됨 · 변경할 때만 입력' : '설정된 경우에만 입력'; $('clearKey').checked = false;
   $('blockedUsers').value = settings.blockedUsers.join('\n'); $('bannedWords').value = settings.bannedWords.join('\n');
   if (data.overlayUrl) $('overlayUrl').value = data.overlayUrl;
-  count = data.total; $('message-count').textContent = count; showStatus(data.status); ranges(); toggleMode();
+  count = data.total; $('message-count').textContent = count; showStatus(data.status); ranges(); toggleMode(); drawCharacter();
 }
 async function api(route, value = {}) {
   const res = await fetch(route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shrimp-Token': token }, body: JSON.stringify(value) });
@@ -50,9 +51,9 @@ $('connection-form').addEventListener('submit', e => { e.preventDefault(); actio
 }, '연결을 시작했어요. 방송 상태를 확인하고 있습니다.'); });
 $('appearance-form').addEventListener('submit', e => { e.preventDefault(); action(async () => {
   const value = Object.fromEntries(numeric.map(key => [key, Number($(key).value)])); value.showNames = $('showNames').value; value.palette = $('palette').value;
-  value.fontFamily = $('fontFamily').value; value.extraMotion = $('extraMotion').checked;
+  value.character = $('character').value; value.renderQuality = $('renderQuality').value; value.fontFamily = $('fontFamily').value; value.extraMotion = $('extraMotion').checked;
   for (const key of ['bubbleBg', 'bubbleTextColor', 'bubbleBorder', 'nameBg', 'nameTextColor', 'nameBorder', 'namePosition', 'fontWeight']) value[key] = $(key).value;
-  const result = await api('/api/settings', value); settings = result.settings;
+  const result = await api('/api/settings', value); settings = result.settings; drawCharacter();
 }, '마을 설정을 저장했어요.'); });
 $('filter-form').addEventListener('submit', e => { e.preventDefault(); action(async () => {
   const value = { blockedUsers: $('blockedUsers').value.split('\n'), bannedWords: $('bannedWords').value.split('\n') };
@@ -83,3 +84,17 @@ new IntersectionObserver(entries => {
 
 $('test-ogq-static').addEventListener('click', () => action(() => api('/api/test-ogq', { nickname: $('testNickname').value, animated: false })));
 $('test-ogq-animated').addEventListener('click', () => action(() => api('/api/test-ogq', { nickname: $('testNickname').value, animated: true })));
+
+async function drawCharacter() {
+  const info = characterInfo($('character').value), name = info.label;
+  $('character-headline').textContent = `내 ${name}가 말해요.`;
+  const art = $('character-art'), g = art.getContext('2d'), img = new Image();
+  img.src = info.poses;
+  try { await img.decode(); } catch { return; }
+  if ($('character').value !== info.id) return;
+  g.clearRect(0,0,art.width,art.height); g.filter=`brightness(${Number($('characterBrightness').value || 114)/100}) saturate(1.08)`;
+  g.drawImage(img,0,0,img.naturalWidth/4,img.naturalHeight/info.rows,10,0,300,300);
+}
+$('character').addEventListener('change', drawCharacter);
+
+$('characterBrightness').addEventListener('change',drawCharacter);

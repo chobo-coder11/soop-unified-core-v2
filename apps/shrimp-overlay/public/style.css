@@ -6,3 +6,5 @@
 @font-face{font-family:Gaegu;src:url('/assets/fonts/Gaegu-Regular.woff2') format('woff2');font-display:swap;font-weight:400}
 
 #emote-layer{position:fixed;inset:0;pointer-events:none;overflow:hidden}.ogq-emote{position:absolute;left:0;top:0;object-fit:contain;pointer-events:none;will-change:transform,opacity}
+
+.intro-art #character-art{width:280px;height:263px;max-width:100%;position:relative;z-index:1}

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { fork, spawn } from 'node:child_process';
 import { CoreBridge } from './lib/bridge.mjs';
+import { CHARACTERS } from './public/characters.mjs';
 import { ogqEmote } from './public/emotes.mjs';
 import { DEFAULTS, normalizeSettings, publicSettings, filtered } from './lib/settings.mjs';
 
@@ -26,7 +27,7 @@ function broadcast(type, data) {
   for (const res of clients) { if (res.writableLength > 262144) { res.destroy(); clients.delete(res); } else res.write(payload); }
 }
 function snapshot(admin = false) {
-  return { service: 'soop-shrimp-overlay', version: '1.2.0', settings: publicSettings(settings), status: bridge.status, running, demo: Boolean(demo),
+  return { service: 'soop-shrimp-overlay', version: '1.4.0', settings: publicSettings(settings), status: bridge.status, running, demo: Boolean(demo),
     total, recent: recent.filter(x => Date.now() - x.at < 20000), ...(admin ? { token: TOKEN, overlayUrl: `http://127.0.0.1:${PORT}/overlay` } : {}) };
 }
 function clearScene() { recent = []; broadcast('clear', {}); }
@@ -128,11 +129,12 @@ async function mutate(route, value) {
 }
 const allowedHosts = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`, `[::1]:${PORT}`]);
 const staticRoutes = new Map([
-  ['/', 'public/index.html'], ['/overlay', 'public/overlay.html'], ['/overlay.js', 'public/overlay.js'], ['/model.mjs', 'public/model.mjs'], ['/motion.mjs', 'public/motion.mjs'], ['/rendering.mjs', 'public/rendering.mjs'], ['/emotes.mjs', 'public/emotes.mjs'],
-  ['/admin.js', 'public/admin.js'], ['/style.css', 'public/style.css'], ['/assets/shrimp.png', 'public/assets/shrimp.png'],
+  ['/', 'public/index.html'], ['/overlay', 'public/overlay.html'], ['/overlay.js', 'public/overlay.js'], ['/model.mjs', 'public/model.mjs'], ['/motion.mjs', 'public/motion.mjs'], ['/rendering.mjs', 'public/rendering.mjs'], ['/emotes.mjs', 'public/emotes.mjs'], ['/characters.mjs', 'public/characters.mjs'],
+  ['/admin.js', 'public/admin.js'], ['/style.css', 'public/style.css'], ['/assets/shrimp.png', 'public/assets/shrimp.png'], ['/assets/duck-atlas.png', 'public/assets/duck-atlas.png'],
   ['/assets/shrimp-poses.png', 'public/assets/shrimp-poses.png'], ['/assets/shrimp-walk.png', 'public/assets/shrimp-walk.png'],
   ['/assets/fonts/Gaegu-Regular.woff2', 'public/assets/fonts/Gaegu-Regular.woff2'], ['/assets/fonts/Jua-Regular.woff2', 'public/assets/fonts/Jua-Regular.woff2']
 ]);
+for (const c of CHARACTERS) for (const asset of [c.poses,c.walking]) staticRoutes.set(asset,'public'+asset);
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.woff2': 'font/woff2' };
 const server = http.createServer(async (req, res) => {
   if (!allowedHosts.has(req.headers.host)) return json(res, 403, { error: '허용되지 않은 호스트입니다.' });

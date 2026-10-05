@@ -1,3 +1,4 @@
+import { characterInfo, renderResolution, textureResolution } from './characters.mjs';
 import { EmoteLayer } from './emotes.mjs';
 import { FrameCache, FrameMeter } from './rendering.mjs';
 import { Village } from './model.mjs';
@@ -5,17 +6,15 @@ import { visualMotion, idleMotion, moveAgent } from './motion.mjs';
 const emoteLayer = new EmoteLayer(document.querySelector('#emote-layer'));
 const canvas = document.querySelector('#village');
 const ctx = canvas.getContext('2d', { alpha: true });
-const image = new Image(); image.src = '/assets/shrimp.png';
-image.onerror = () => { document.querySelector('#overlay-error').hidden = false; };
 const frameBounds = new WeakMap();
-function prepareFrames(img) {
+function prepareFrames(img, rows = 2) {
   img.addEventListener('load', () => {
     const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
     const g = c.getContext('2d'); g.drawImage(img, 0, 0); const pixels = g.getImageData(0, 0, c.width, c.height).data;
     const frames = [];
-    for (let i = 0; i < 8; i++) {
-      const x0 = Math.round(i % 4 * c.width / 4), y0 = Math.round(Math.floor(i / 4) * c.height / 2);
-      const x1 = Math.round((i % 4 + 1) * c.width / 4), y1 = Math.round((Math.floor(i / 4) + 1) * c.height / 2);
+    for (let i = 0; i < 4 * rows; i++) {
+      const x0 = Math.round(i % 4 * c.width / 4), y0 = Math.round(Math.floor(i / 4) * c.height / rows);
+      const x1 = Math.round((i % 4 + 1) * c.width / 4), y1 = Math.round((Math.floor(i / 4) + 1) * c.height / rows);
       let left = x1, right = x0, top = y1, bottom = y0;
       for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (pixels[(y * c.width + x) * 4 + 3] > 32) { left = Math.min(left,x); right = Math.max(right,x+1); top = Math.min(top,y); bottom = Math.max(bottom,y+1); }
       frames.push({ x: left, y: top, w: Math.max(1,right-left), h: Math.max(1,bottom-top) });
@@ -28,13 +27,13 @@ const blendSurface = document.createElement('canvas');
 let blendContext = blendSurface.getContext('2d');
 function frameTexture(img, index, size, hue) {
   const frame = frameBounds.get(img)?.[index]; if (!frame) return null;
-  const dpr = Math.min(window.devicePixelRatio || 1, 1.5), pixels = Math.ceil(size * dpr);
-  const key = `${img === walkAtlas ? 'walk' : 'pose'}:${index}:${pixels}:${hue}`;
+  const pixels = textureResolution(size, village.settings.renderQuality, window.devicePixelRatio || 1);
+  const key = `${img.src}:${index}:${pixels}:${hue}`;
   const existing = textureCache.get(key); if (existing) return existing;
   const tile = document.createElement('canvas'); tile.width = pixels; tile.height = pixels;
   const g = tile.getContext('2d');
   const scale = Math.min(pixels / frame.w, pixels * .9 / frame.h), w = frame.w * scale, h = frame.h * scale;
-  g.filter = hue ? `hue-rotate(${hue}deg)` : 'none';
+  g.filter = `brightness(${(village.settings.characterBrightness ?? 114)/100}) saturate(1.08)${hue ? ` hue-rotate(${hue}deg)` : ''}`;
   g.drawImage(img, frame.x, frame.y, frame.w, frame.h, (pixels - w) / 2, pixels - h, w, h);
   return textureCache.put(key, tile, pixels * pixels * 4);
 }
@@ -51,14 +50,30 @@ function drawFrame(img, index, size, h, hue, nextIndex = index, mix = 0) {
   g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
   ctx.drawImage(blendSurface, -size / 2, h / 2 - size, size, size);
 }
-const atlas = new Image(); prepareFrames(atlas); atlas.src = '/assets/shrimp-poses.png';
-const walkAtlas = new Image(); prepareFrames(walkAtlas); walkAtlas.src = '/assets/shrimp-walk.png';
+let characterImages = null, requestedCharacter = '', loadGeneration = 0;
+function loadCharacter(id) {
+  const info = characterInfo(id); if (requestedCharacter === info.id) return;
+  requestedCharacter = info.id; const generation = ++loadGeneration;
+  const load = (src, rows) => new Promise((resolve,reject) => {
+    const img = new Image(); prepareFrames(img,rows);
+    img.addEventListener('load',()=>resolve(img)); img.addEventListener('error',reject); img.src=src;
+  });
+  const poses = load(info.poses,info.rows);
+  const walking = info.walking === info.poses ? poses : load(info.walking,2);
+  Promise.all([poses,walking]).then(([poses,walking]) => {
+    if (generation !== loadGeneration) return;
+    characterImages={info,poses,walking}; textureCache.clear();
+    const frame=frameBounds.get(poses)[0]; village.configure({spriteHeadRatio:Math.min(.9,frame.h/frame.w)});
+    document.querySelector('#overlay-error').hidden=true;
+  }).catch(()=> { if (generation===loadGeneration) { requestedCharacter=''; document.querySelector('#overlay-error').hidden=false; } });
+}
 Promise.all([document.fonts.load('20px Jua'), document.fonts.load('20px Gaegu')]).then(() => {
+  textCache.clear(); widthCache.clear();
   for (const b of village.bubbles) village.queue.set(b.key, { ...b.chat, queuedAt: performance.now() });
   village.bubbles = [];
 }).catch(() => {});
 const ambientAgents = [];
-const defaults = { size: 108, speed: 28, maxCharacters: 24, maxBubbles: 5, ambientCharacters: 6, bubbleSeconds: 5, idleMinutes: 5, bottom: 20, fontSize: 19, showNames: 'speaking', palette: 'pastel' };
+const defaults = { character:'shrimp',renderQuality:'balanced',motionFrequency:8,size: 108, speed: 28, maxCharacters: 24, maxBubbles: 5, ambientCharacters: 6, bubbleSeconds: 5, idleMinutes: 5, bottom: 20, fontSize: 19, showNames: 'speaking', palette: 'pastel' };
 const village = new Village(defaults);
 const frameMeter = new FrameMeter();
 let lastDiagnostics = -Infinity, previewPaused = false, lastPaintTop = 0;
@@ -66,10 +81,10 @@ addEventListener('message', event => { if (preview && event.source === parent &&
 let status = 'idle', preview = new URLSearchParams(location.search).has('preview'), loaded = false, previous = performance.now();
 const connection = new EventSource('/events');
 connection.addEventListener('snapshot', e => {
-  const data = JSON.parse(e.data); village.configure(data.settings); status = data.status.state;
+  const data = JSON.parse(e.data); village.configure(data.settings); loadCharacter(data.settings.character); resize(); status = data.status.state;
   village.clear(); for (const chat of data.recent) village.chat(chat, performance.now()); loaded = true;
 });
-connection.addEventListener('settings', e => { textureCache.clear(); village.configure(JSON.parse(e.data)); });
+connection.addEventListener('settings', e => { textureCache.clear(); textCache.clear(); widthCache.clear(); const data=JSON.parse(e.data); const qualityChanged=data.renderQuality !== village.settings.renderQuality; village.configure(data); loadCharacter(data.character); if (qualityChanged) resize(); });
 connection.addEventListener('filter', e => village.configure(JSON.parse(e.data)));
 connection.addEventListener('chat', e => { village.chat(JSON.parse(e.data), performance.now()); });
 connection.addEventListener('clear', () => village.clear());
@@ -77,7 +92,7 @@ connection.addEventListener('hide-user', e => village.hideUser(JSON.parse(e.data
 connection.addEventListener('status', e => { status = JSON.parse(e.data).state; });
 connection.onerror = () => { status = 'disconnected'; };
 function resize() {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const dpr = renderResolution(village.settings.renderQuality, window.devicePixelRatio || 1);
   canvas.width = Math.round(innerWidth * dpr); canvas.height = Math.round(innerHeight * dpr);
   canvas.style.width = innerWidth + 'px'; canvas.style.height = innerHeight + 'px';
   lastPaintTop = 0; textureCache.clear();
@@ -85,18 +100,22 @@ function resize() {
 }
 addEventListener('resize', resize); resize();
 function font(size, weight = village.settings.fontWeight === 'bold' ? 700 : 400) { return village.settings.fontFamily !== 'system' ? `400 ${size}px ${village.settings.fontFamily === "gaegu" ? "Gaegu" : "Jua"}, "Malgun Gothic", "Segoe UI Emoji", "Apple Color Emoji", sans-serif` : `${weight} ${size}px "Malgun Gothic", "Apple SD Gothic Neo", "Segoe UI Emoji", "Apple Color Emoji", sans-serif`; }
+const textCache = new FrameCache(128*1024), widthCache = new FrameCache(64*1024);
+function textWidth(text) { const key=ctx.font+'|'+text; let w=widthCache.get(key); if (w === undefined) w=widthCache.put(key,ctx.measureText(text).width,key.length*2+16); return w; }
 function wrap(text, maxWidth, maxLines) {
+  const key=ctx.font+'|'+maxWidth+'|'+maxLines+'|'+text, cached=textCache.get(key); if (cached) return cached;
+  const remember=lines=>textCache.put(key,lines,(key.length+lines.join('').length)*2+32);
   const lines = []; let line = '';
   for (const ch of text.replace(/\r/g, '')) {
     if (ch === '\n' || ctx.measureText(line + ch).width > maxWidth) {
       lines.push(line); line = ch === '\n' ? '' : ch;
       if (lines.length >= maxLines) {
         let last = lines[maxLines - 1]; while (ctx.measureText(last + '…').width > maxWidth) last = last.slice(0, -1);
-        lines[maxLines - 1] = last + '…'; return lines;
+        lines[maxLines - 1] = last + '…'; return remember(lines);
       }
     } else line += ch;
   }
-  if (line || !lines.length) lines.push(line); return lines;
+  if (line || !lines.length) lines.push(line); return remember(lines);
 }
 function measure(chat, maximum) {
   if (chat.emoticon) {
@@ -107,32 +126,32 @@ function measure(chat, maximum) {
   }
   ctx.font = font(village.settings.fontSize);
   const lines = wrap(chat.message, maximum - (village.settings.bubblePadding ?? 16) * 2, village.settings.bubbleMaxLines || 4);
-  const w = Math.max(Math.min(120, maximum), Math.min(maximum, Math.max(...lines.map(l => ctx.measureText(l).width)) + (village.settings.bubblePadding ?? 16) * 2));
+  const w = Math.max(Math.min(120, maximum), Math.min(maximum, Math.max(...lines.map(l => textWidth(l))) + (village.settings.bubblePadding ?? 16) * 2));
   return { lines, w, h: lines.length * (village.settings.fontSize + 7) + (village.settings.bubblePadding ?? 16) * 2 };
 }
 function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
 function sprite(a, now, ambient = false) {
-  if (!image.complete || !image.naturalWidth) return;
+  if (!characterImages) return;
   const s = village.settings.size;
-  const useAtlas = atlas.complete && atlas.naturalWidth > 0;
-  const h = useAtlas ? s : s * image.naturalHeight / image.naturalWidth;
-  const motion = visualMotion(a, now, village.settings.extraMotion !== false);
+  const {info,poses,walking}=characterImages;
+  const kind=info.id, h=s;
+  const motion = visualMotion(a, now, village.settings.extraMotion !== false, characterImages?.info.id || village.settings.character);
   const base = village.characterBase() + motion.bob;
   ctx.save(); ctx.translate(a.x, base - h / 2);
-  const useWalk = motion.mode === 'walk' && walkAtlas.complete && walkAtlas.naturalWidth > 0;
+  const useWalk = motion.mode === 'walk' && walking.complete && walking.naturalWidth > 0;
   if (!useWalk && !motion.faceForward) ctx.scale(a.dir > 0 ? -1 : 1, 1);
   ctx.rotate(motion.rotation); ctx.scale(motion.sx, motion.sy);
   const hue = village.settings.palette === 'pastel' ? [0, 330, 18, 160, 285, 45][a.seed % 6] : 0;
   ctx.filter = 'none';
   ctx.globalAlpha = ambient ? (preview ? .8 : 1) : Math.min(1, (now - a.born) / 450);
   if (useWalk) {
-    const row = a.dir > 0 ? 0 : 4;
-    drawFrame(walkAtlas, motion.walkFrame + row, s, h, hue, motion.walkNextFrame + row, motion.walkMix);
-  } else if (useAtlas) {
+    const row = info.walkOffset + (a.dir > 0 ? 0 : 4);
+    drawFrame(walking, motion.walkFrame + row, s, h, hue, motion.walkNextFrame + row, motion.walkMix);
+  } else {
     // The second walking pose faces the other way in the atlas; normalize it.
-    if (motion.pose === 2) ctx.scale(-1, 1);
-    drawFrame(atlas, motion.pose, s, h, hue, motion.nextPose, motion.poseMix);
-  } else ctx.drawImage(image, -s / 2, -h / 2, s, h);
+    if (kind === 'shrimp' && motion.pose === 2) ctx.scale(-1, 1);
+    drawFrame(poses, motion.pose, s, h, hue, motion.nextPose, motion.poseMix);
+  }
   ctx.restore();
   if (motion.effect && village.settings.extraMotion !== false) {
     ctx.save(); ctx.font = font(14); ctx.textAlign = 'center'; ctx.fillStyle = '#f1c29b';
@@ -147,9 +166,9 @@ function sprite(a, now, ambient = false) {
     const c = village.settings, fs = c.nameFontSize || 18, px = c.namePaddingX ?? 12, py = c.namePaddingY ?? 5;
     ctx.save(); ctx.globalAlpha = (c.nameOpacity ?? 100) / 100;
     ctx.font = font(fs); const name = wrap(a.nickname, Math.max(20, Math.min(c.nameMaxWidth || 200, village.width - 8) - px * 2), 1)[0];
-    const w = Math.min(village.width - 8, ctx.measureText(name).width + px * 2), nh = fs + py * 2;
+    const w = Math.min(village.width - 8, textWidth(name) + px * 2), nh = fs + py * 2;
     const nx = Math.max(4, Math.min(village.width - w - 4, a.x - w / 2));
-    const ny = c.namePosition === 'above' ? base - s * .9 - (c.nameGap ?? 2) - nh : base + (c.nameGap ?? 2);
+    const ny = c.namePosition === 'above' ? base - s * (c.spriteHeadRatio || .9) - (c.nameGap ?? 2) - nh : base + (c.nameGap ?? 2);
     ctx.fillStyle = c.nameBg || '#fff3e9'; roundRect(nx, ny, w, nh, Math.min(c.nameRadius ?? 12, nh / 2)); ctx.fill();
     if (c.nameBorderWidth) { ctx.strokeStyle = c.nameBorder; ctx.lineWidth = c.nameBorderWidth; ctx.stroke(); }
     ctx.fillStyle = c.nameTextColor || '#815b58'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(name, nx + w / 2, ny + nh / 2);
@@ -158,7 +177,7 @@ function sprite(a, now, ambient = false) {
 }
 function drawBubble(b, now) {
   const a = village.agents.get(b.key); if (!a) return;
-  b = { ...b, y: b.y + visualMotion(a, now, village.settings.extraMotion !== false).bob };
+  b = { ...b, y: b.y + visualMotion(a, now, village.settings.extraMotion !== false, characterImages?.info.id || village.settings.character).bob };
   ctx.save(); ctx.globalAlpha = Math.min(1, (now - b.started) / 140, (b.until - now) / 200);
   ctx.font = font(village.settings.fontSize);
   const c = village.settings, padding = c.bubblePadding ?? 16;
@@ -194,9 +213,9 @@ function render(now) {
   for (let i = 0; i < ambientCount; i++) {
     const margin = village.settings.size / 2, span = Math.max(1, village.width - margin * 2);
     const a = ambientAgents[i] ||= { x: margin + (i + .5) * span / 12, dir: i % 2 ? -1 : 1, phase: i, seed: i * 719, born: now };
-    idleMotion(a, now, village.settings.extraMotion !== false);
+    idleMotion(a, now, village.settings.extraMotion !== false, village.settings.character, village.settings.motionFrequency);
     a.speed = .7 + i * .04;
-    moveAgent(a, now, dt, { speed: village.settings.speed, size: village.settings.size, width: village.width }, a.motion !== 'walk');
+    moveAgent(a, now, dt, { speed: village.settings.speed, size: village.settings.size, width: village.width, character: village.settings.character }, a.motion !== 'walk');
     sprite(a, now, true);
   }
   for (const a of village.agents.values()) sprite(a, now);
@@ -207,7 +226,7 @@ function render(now) {
   if (now - lastDiagnostics >= 500) {
   lastDiagnostics = now;
   const performanceStats = frameMeter.snapshot();
-  window.overlayStats = { characters: village.agents.size, ambientCharacters: ambientCount, bubbles: village.bubbles.length, queued: village.queue.size, dropped: village.dropped, status, ...performanceStats, textureCacheBytes: textureCache.bytes,
+  window.overlayStats = { characters: village.agents.size, ambientCharacters: ambientCount, bubbles: village.bubbles.length, queued: village.queue.size, dropped: village.dropped, status, ...performanceStats, textureCacheBytes: textureCache.bytes, character:characterImages?.info.id, renderQuality:village.settings.renderQuality,
     agents: [...village.agents.values()].map(a => ({ userId: a.userId, nickname: a.nickname, x: a.x, talking: a.talking })),
     boxes: village.bubbles.map(b => ({ x: b.x, y: b.y, w: b.w, h: b.h, nickname: b.chat.nickname, message: b.chat.message })) };
   if (preview) parent.postMessage({ type: 'shrimp-performance', ...performanceStats }, location.origin);

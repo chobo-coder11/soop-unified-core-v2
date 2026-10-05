@@ -1,3 +1,4 @@
+import { CHARACTERS } from '../public/characters.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -32,15 +33,15 @@ test('real server forwards authenticated core chat over SSE; saves settings, fil
     start(); await waitFor(async () => { try { return (await fetch(url + '/api/state')).ok; } catch { return false; } });
     let state = await fetch(url + '/api/state').then(r => r.json());
     assert.equal(state.service, 'soop-shrimp-overlay');
-    assert.equal(state.version, '1.2.0');
-    for (const asset of ['/assets/shrimp-walk.png','/assets/shrimp-poses.png','/assets/fonts/Jua-Regular.woff2','/assets/fonts/Gaegu-Regular.woff2','/motion.mjs','/rendering.mjs','/emotes.mjs']) {
+    assert.equal(state.version, '1.4.0');
+    for (const asset of [...new Set(CHARACTERS.flatMap(c=>[c.poses,c.walking])),'/characters.mjs','/assets/shrimp-walk.png','/assets/shrimp-poses.png','/assets/fonts/Jua-Regular.woff2','/assets/fonts/Gaegu-Regular.woff2','/motion.mjs','/rendering.mjs','/emotes.mjs']) {
       const response = await fetch(url + asset); assert.equal(response.status, 200);
       const bytes = new Uint8Array(await response.arrayBuffer()); assert.ok(bytes.length > 100);
       if (asset.endsWith('.woff2')) { assert.equal(new TextDecoder().decode(bytes.slice(0,4)), 'wOF2'); assert.equal(response.headers.get('content-type'), 'font/woff2'); }
     }
     const post = (route, body = {}) => fetch(url + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shrimp-Token': state.token }, body: JSON.stringify(body) });
     assert.equal((await fetch(url + '/api/test', { method: 'POST', body: '{}' })).status, 403);
-    assert.equal((await post('/api/settings', { mode: 'external', coreUrl: `ws://127.0.0.1:${core.address().port}/v1/ws`, apiKey: 'private-key', streamerId: 'channel', bannedWords: ['hide-me'] })).status, 200);
+    assert.equal((await post('/api/settings', { mode: 'external', coreUrl: `ws://127.0.0.1:${core.address().port}/v1/ws`, apiKey: 'private-key', streamerId: 'channel', bannedWords: ['hide-me'],character:'tadpole',renderQuality:'economy',motionFrequency:3 })).status, 200);
     assert.equal((await post('/api/connect')).status, 200); await waitFor(() => socket);
     streamAbort = new AbortController();
     const response = await fetch(url + '/events', { signal: streamAbort.signal }); reader = response.body.getReader();
@@ -63,7 +64,7 @@ test('real server forwards authenticated core chat over SSE; saves settings, fil
     const saved = JSON.parse(await readFile(path.join(dir, 'settings.json'), 'utf8')); assert.equal(saved.streamerId, 'channel');
     assert.equal((await post('/api/shutdown')).status, 200); await waitFor(() => proc.exitCode !== null);
     start(); await waitFor(async () => { try { return (await fetch(url + '/api/state')).ok; } catch { return false; } });
-    state = await fetch(url + '/api/state').then(r => r.json()); assert.equal(state.settings.streamerId, 'channel'); assert.equal(state.settings.hasApiKey, true); assert.equal(state.running, false);
+    state = await fetch(url + '/api/state').then(r => r.json()); assert.equal(state.settings.streamerId, 'channel'); assert.equal(state.settings.character,'tadpole'); assert.equal(state.settings.renderQuality,'economy'); assert.equal(state.settings.motionFrequency,3); assert.equal(state.settings.hasApiKey, true); assert.equal(state.running, false);
     await post('/api/shutdown'); await waitFor(() => proc.exitCode !== null);
   } catch (e) { e.message += '\n' + output; throw e; }
   finally { streamAbort?.abort(); proc?.kill(); for (const ws of wss.clients) ws.terminate(); await new Promise(r => wss.close(r)); await new Promise(r => core.close(r)); await rm(dir, { recursive: true, force: true }); }

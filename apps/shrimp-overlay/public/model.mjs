@@ -12,7 +12,7 @@ export class Village {
     while (this.agents.size > this.settings.maxCharacters) this.evict();
     this.bubbles = this.bubbles.slice(0, this.settings.maxBubbles);
   }
-  resize(width, height) { this.width = width; this.height = height; for (const a of this.agents.values()) a.x = Math.max(15, Math.min(width - 15, a.x)); this.bubbles = []; }
+  resize(width, height) { for (const b of this.bubbles) this.queue.set(b.key, { ...b.chat, queuedAt:b.started }); this.width = width; this.height = height; for (const a of this.agents.values()) a.x = Math.max(15, Math.min(width - 15, a.x)); this.bubbles = []; }
   key(chat) { return `${chat.streamerId}:${chat.userId}`; }
   isFiltered(chat) { return (this.settings.blockedUsers || []).some(x => x.toLowerCase() === chat.userId.toLowerCase()) || (this.settings.bannedWords || []).some(x => chat.message.toLowerCase().includes(x.toLowerCase())); }
   chat(chat, now) {
@@ -57,8 +57,8 @@ export class Village {
       a.talking = this.bubbles.some(b => b.key === a.key);
       a.waiting = this.queue.has(a.key);
       if (wasTalking && !a.talking) { a.motion = 'walk'; a.motionUntil = 0; a.nextMotionAt = now + 5000 + a.seed % 4000; }
-      if (!a.talking && !a.waiting && now >= a.idleUntil) idleMotion(a, now, this.settings.extraMotion !== false);
-      moveAgent(a, now, dt, { speed: this.settings.speed, size: this.settings.size, width: this.width }, a.talking || a.waiting || now < a.idleUntil || a.motion !== 'walk');
+      if (!a.talking && !a.waiting && now >= a.idleUntil) idleMotion(a, now, this.settings.extraMotion !== false, this.settings.character, this.settings.motionFrequency);
+      moveAgent(a, now, dt, { speed: this.settings.speed, size: this.settings.size, width: this.width, character: this.settings.character }, a.talking || a.waiting || now < a.idleUntil || a.motion !== 'walk');
     }
     for (const [key, chat] of this.queue) {
       if (this.bubbles.length >= this.settings.maxBubbles) break;
@@ -80,7 +80,7 @@ export class Village {
     const w = Math.min(measured.w, this.width - 16), h = measured.h;
     const bx = Math.max(8, Math.min(this.width - w - 8, x - w / 2));
     const nameHeight = this.settings.namePosition === 'above' && this.settings.showNames !== 'never' ? (this.settings.nameFontSize || 18) + 2 * (this.settings.namePaddingY ?? 5) + (this.settings.nameGap ?? 2) : 0;
-    const baseline = this.characterBase() - this.settings.size * .9 - (this.settings.bubbleGap ?? 10) - nameHeight;
+    const baseline = this.characterBase() - this.settings.size * (this.settings.spriteHeadRatio || .9) - (this.settings.bubbleGap ?? 10) - nameHeight;
     for (let lane = 0; lane < 1; lane++) {
       const y = baseline - h - lane * (h + 14);
       if (y < 8) continue;

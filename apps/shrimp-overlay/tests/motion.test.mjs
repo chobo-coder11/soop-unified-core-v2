@@ -45,10 +45,10 @@ test('idle variety waits for deceleration and chat reaction plays once', async (
   assert.equal(a.motionPending,false); assert.ok(a.motionStarted > 100);
   assert.equal(a.motionUntil-a.motionStarted,ACTION_MS[a.motion]);
   const seen = new Set();
-  for (let i=0;i<16;i++) { a.nextMotionAt=0;a.motionUntil=0;idleMotion(a,10000+i*3000,true);seen.add(a.motion); }
+  for (let i=0;i<IDLE_ACTIONS.length*2;i++) { a.nextMotionAt=0;a.motionUntil=0;idleMotion(a,10000+i*3000,true);seen.add(a.motion); }
   assert.deepEqual([...seen].sort(),[...IDLE_ACTIONS].sort());
   assert.equal(visualMotion({ ...a,talking:true,reaction:'jump',reactionAt:0 },5000).mode,'talk');
-  for (const action of ['lookaround','stretch','hop','curious','wave','sleep']) {
+  for (const action of IDLE_ACTIONS) {
     const start=visualMotion({ ...a,velocity:0,motion:action,motionStarted:0 },0);
     const end=visualMotion({ ...a,velocity:0,motion:action,motionStarted:0 },ACTION_MS[action]);
     assert.ok(Math.abs(start.bob) < .00001 && Math.abs(end.bob) < .00001);
