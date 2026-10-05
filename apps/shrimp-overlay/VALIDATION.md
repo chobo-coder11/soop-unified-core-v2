@@ -2,6 +2,10 @@
 
 검증 환경: Linux, Node.js 24.19.0. SOOP Unified Core 기준 커밋 `a4e5c9f6e7fb0480a4de323c8e8cd8484ceb1a5d`.
 
+GitHub Actions Shrimp Overlay도 Node.js 22/24 빌드·테스트 성공: https://github.com/chobo-coder11/soop-unified-core-v2/actions/runs/37261076214
+
+독립 ZIP을 새 임시 폴더에 풀어 launch.mjs 실행, 관리/오버레이/이미지 HTTP 응답, 테스트 채팅 입력, 종료 요청을 확인했습니다.
+
 ## 통과
 
 `node --test tests/*.test.mjs`: **8개 통과 / 0개 실패**.
