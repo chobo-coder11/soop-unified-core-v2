@@ -1,5 +1,7 @@
+import { PRESETS } from './presets.mjs';
 import { CHARACTERS, characterInfo } from './characters.mjs';
 const $ = id => document.getElementById(id);
+let appearanceDirty=false;
 let token = '', settings = {}, count = 0, recent = [], busy = false;
 const numeric = ['characterBrightness', 'motionFrequency', 'emoteSize', 'size', 'speed', 'maxCharacters', 'maxBubbles', 'bubbleSeconds', 'fontSize', 'bottom', 'idleMinutes', 'ambientCharacters', 'bubbleMaxWidth', 'bubbleMaxLines', 'bubblePadding', 'bubbleRadius', 'bubbleBorderWidth', 'bubbleGap', 'bubbleOpacity', 'nameFontSize', 'namePaddingX', 'namePaddingY', 'nameRadius', 'nameBorderWidth', 'nameGap', 'nameMaxWidth', 'nameOpacity'];
 function toast(text, error = false) { const el = $('toast'); el.textContent = text; el.className = error ? 'error' : ''; el.hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => { el.hidden = true; }, 4500); }
@@ -9,7 +11,7 @@ function toggleMode() { const external = document.querySelector('input[name="mod
 function populate(data) {
   settings = data.settings; token = data.token || token;
   for (const key of [...numeric, 'streamerId', 'coreUrl', 'showNames', 'palette', 'fontFamily', 'character', 'renderQuality', 'namePosition', 'fontWeight', 'bubbleBg', 'bubbleTextColor', 'bubbleBorder', 'nameBg', 'nameTextColor', 'nameBorder']) $(key).value = settings[key];
-  $('extraMotion').checked = settings.extraMotion;
+  for(const key of ['extraMotion','mouthMotion','chatReactions'])$(key).checked=settings[key];
   document.querySelector(`input[name="mode"][value="${settings.mode}"]`).checked = true;
   $('apiKey').value = ''; $('apiKey').placeholder = settings.hasApiKey ? '키 저장됨 · 변경할 때만 입력' : '설정된 경우에만 입력'; $('clearKey').checked = false;
   $('blockedUsers').value = settings.blockedUsers.join('\n'); $('bannedWords').value = settings.bannedWords.join('\n');
@@ -51,9 +53,9 @@ $('connection-form').addEventListener('submit', e => { e.preventDefault(); actio
 }, '연결을 시작했어요. 방송 상태를 확인하고 있습니다.'); });
 $('appearance-form').addEventListener('submit', e => { e.preventDefault(); action(async () => {
   const value = Object.fromEntries(numeric.map(key => [key, Number($(key).value)])); value.showNames = $('showNames').value; value.palette = $('palette').value;
-  value.character = $('character').value; value.renderQuality = $('renderQuality').value; value.fontFamily = $('fontFamily').value; value.extraMotion = $('extraMotion').checked;
+  value.character = $('character').value; value.renderQuality = $('renderQuality').value; value.fontFamily = $('fontFamily').value; for(const key of ['extraMotion','mouthMotion','chatReactions'])value[key]=$(key).checked;
   for (const key of ['bubbleBg', 'bubbleTextColor', 'bubbleBorder', 'nameBg', 'nameTextColor', 'nameBorder', 'namePosition', 'fontWeight']) value[key] = $(key).value;
-  const result = await api('/api/settings', value); settings = result.settings; drawCharacter();
+  const result = await api('/api/settings', value); settings = result.settings;markAppearance(false);drawCharacter();
 }, '마을 설정을 저장했어요.'); });
 $('filter-form').addEventListener('submit', e => { e.preventDefault(); action(async () => {
   const value = { blockedUsers: $('blockedUsers').value.split('\n'), bannedWords: $('bannedWords').value.split('\n') };
@@ -65,7 +67,7 @@ $('demo').addEventListener('click', () => action(() => api('/api/demo'), '미리
 $('clear').addEventListener('click', () => action(() => api('/api/clear'), '화면을 비웠어요.'));
 $('copy').addEventListener('click', async () => { try { await navigator.clipboard.writeText($('overlayUrl').value); toast('오버레이 주소를 복사했어요.'); } catch { $('overlayUrl').select(); toast('주소를 선택했어요. Ctrl+C로 복사해 주세요.'); } });
 const events = new EventSource('/events');
-events.addEventListener('snapshot', e => { const d = JSON.parse(e.data); count = d.total; $('message-count').textContent = count; showStatus(d.status); recent = [...d.recent].reverse().slice(0, 12); renderLog(); });
+events.addEventListener('snapshot', e => { fetch('/api/state').then(r=>r.json()).then(d=>{token=d.token;}).catch(()=>{}); const d = JSON.parse(e.data); count = d.total; $('message-count').textContent = count; showStatus(d.status); recent = [...d.recent].reverse().slice(0, 12); renderLog(); });
 events.addEventListener('chat', e => { const chat = JSON.parse(e.data); count++; $('message-count').textContent = count; log(chat); });
 events.addEventListener('status', e => showStatus(JSON.parse(e.data)));
 events.addEventListener('notice', e => toast(JSON.parse(e.data).message));
@@ -75,7 +77,9 @@ events.onerror = () => showStatus({ state: 'error', label: '프로그램 연결 
 
 addEventListener('message', event => {
   if (event.origin !== location.origin || event.source !== $('preview').contentWindow || event.data?.type !== 'shrimp-performance') return;
-  const { fps, drawMs } = event.data;
+  const { fps, drawMs,queued=0,dropped=0,spaceBlocked=false } = event.data;
+  const warning=$('scene-warning');warning.hidden=!spaceBlocked&&queued===0;warning.textContent=queued?`채팅 ${queued}개 대기 중`:'';
+  if(spaceBlocked)warning.textContent='말풍선 공간이 부족해요. 캐릭터·글자 크기나 아래 여백을 줄여 주세요.';
   $('performance-label').textContent = fps > 0 ? `미리보기 ${fps}fps · 그리기 ${drawMs}ms` : 'FPS 측정 중';
 });
 new IntersectionObserver(entries => {
@@ -98,3 +102,12 @@ async function drawCharacter() {
 $('character').addEventListener('change', drawCharacter);
 
 $('characterBrightness').addEventListener('change',drawCharacter);
+
+const appearanceKeys=[...numeric,'character','palette','showNames','fontFamily','renderQuality','namePosition','fontWeight','bubbleBg','bubbleTextColor','bubbleBorder','nameBg','nameTextColor','nameBorder','extraMotion','mouthMotion','chatReactions'];
+function markAppearance(dirty){appearanceDirty=dirty;document.querySelector('.appearance-save').dataset.dirty=String(dirty);$('appearance-state').textContent=dirty?'아직 방송에 적용되지 않았어요. 아래 버튼으로 저장해 주세요.':'저장된 설정을 사용 중이에요.';}
+$('appearance-form').addEventListener('input',()=>{markAppearance(true);document.querySelectorAll('[data-preset]').forEach(b=>b.setAttribute('aria-pressed','false'));});
+document.querySelectorAll('[data-preset]').forEach(button=>button.addEventListener('click',()=>{
+ const preset=PRESETS[button.dataset.preset];for(const [key,value] of Object.entries(preset.values)){const el=$(key);if(el.type==='checkbox')el.checked=value;else el.value=value;}
+ document.querySelectorAll('[data-preset]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));ranges();markAppearance(true);
+}));
+$('reset-appearance').addEventListener('click',()=>{for(const key of appearanceKeys){const el=$(key);if(el.type==='checkbox')el.checked=settings[key];else el.value=settings[key];}ranges();drawCharacter();markAppearance(false);document.querySelectorAll('[data-preset]').forEach(b=>b.setAttribute('aria-pressed','false'));});

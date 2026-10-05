@@ -5,7 +5,7 @@ import http from 'node:http';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, rename, mkdir } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { WebSocketServer } from '../vendor/ws/wrapper.mjs';
@@ -33,8 +33,8 @@ test('real server forwards authenticated core chat over SSE; saves settings, fil
     start(); await waitFor(async () => { try { return (await fetch(url + '/api/state')).ok; } catch { return false; } });
     let state = await fetch(url + '/api/state').then(r => r.json());
     assert.equal(state.service, 'soop-shrimp-overlay');
-    assert.equal(state.version, '1.4.1');
-    for (const asset of [...new Set(CHARACTERS.flatMap(c=>[c.poses,c.walking])),'/characters.mjs','/mouth.mjs','/assets/shrimp-walk.png','/assets/shrimp-poses.png','/assets/fonts/Jua-Regular.woff2','/assets/fonts/Gaegu-Regular.woff2','/motion.mjs','/rendering.mjs','/emotes.mjs']) {
+    assert.equal(state.version, '1.5.0');
+    for (const asset of [...new Set(CHARACTERS.flatMap(c=>[c.poses,c.walking])),'/characters.mjs','/mouth.mjs','/layout.mjs','/presets.mjs','/assets/shrimp-walk.png','/assets/shrimp-poses.png','/assets/fonts/Jua-Regular.woff2','/assets/fonts/Gaegu-Regular.woff2','/motion.mjs','/rendering.mjs','/emotes.mjs']) {
       const response = await fetch(url + asset); assert.equal(response.status, 200);
       const bytes = new Uint8Array(await response.arrayBuffer()); assert.ok(bytes.length > 100);
       if (asset.endsWith('.woff2')) { assert.equal(new TextDecoder().decode(bytes.slice(0,4)), 'wOF2'); assert.equal(response.headers.get('content-type'), 'font/woff2'); }
@@ -42,6 +42,13 @@ test('real server forwards authenticated core chat over SSE; saves settings, fil
     const post = (route, body = {}) => fetch(url + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shrimp-Token': state.token }, body: JSON.stringify(body) });
     assert.equal((await fetch(url + '/api/test', { method: 'POST', body: '{}' })).status, 403);
     assert.equal((await post('/api/settings', { mode: 'external', coreUrl: `ws://127.0.0.1:${core.address().port}/v1/ws`, apiKey: 'private-key', streamerId: 'channel', bannedWords: ['hide-me'],character:'tadpole',renderQuality:'economy',motionFrequency:3 })).status, 200);
+    const previousSize=(await fetch(url+'/api/state').then(r=>r.json())).settings.size;
+    await rename(path.join(dir,'settings.json'),path.join(dir,'settings.backup'));
+    await mkdir(path.join(dir,'settings.json'));
+    assert.equal((await post('/api/settings',{size:previousSize+1})).status,400);
+    assert.equal((await fetch(url+'/api/state').then(r=>r.json())).settings.size,previousSize);
+    await rm(path.join(dir,'settings.json'),{recursive:true});
+    await rename(path.join(dir,'settings.backup'),path.join(dir,'settings.json'));
     assert.equal((await post('/api/connect')).status, 200); await waitFor(() => socket);
     streamAbort = new AbortController();
     const response = await fetch(url + '/events', { signal: streamAbort.signal }); reader = response.body.getReader();

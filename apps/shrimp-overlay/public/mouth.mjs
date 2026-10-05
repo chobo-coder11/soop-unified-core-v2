@@ -1,3 +1,4 @@
+import { graphemes } from './layout.mjs';
 // Mouth rectangles are fractions of an atlas cell, calibrated against its artwork.
 // Closed artwork remains the body; only this small facial region can change.
 export const MOUTHS = Object.freeze({
@@ -15,9 +16,11 @@ export const MOUTHS = Object.freeze({
  squirrel:{closed:[.653,.565,.12,.08],open:[.679,.508,.12,.08]},
  tadpole:{closed:[.508,.62,.125,.10],open:[.477,.68,.125,.10]}
 });
-export function mouthMix(now,started=0,seed=0,enabled=true) {
- if(!enabled)return 0;
- const elapsed=Math.max(0,now-started),phase=elapsed/155+(seed%7)*.4;
+export function mouthMix(now,started=0,seed=0,enabled=true,speech=null) {
+ if(!enabled||speech?.duration===0)return 0;
+ const elapsed=Math.max(0,now-started);
+ if(speech&&(elapsed>speech.duration||speech.pauses.some(t=>elapsed>=t&&elapsed<t+220)))return 0;
+ const phase=elapsed/155+(seed%7)*.4;
  // Brief pauses between short syllable groups, without moving the torso.
  if(elapsed%1600>1150)return 0;
  return Math.pow(Math.max(0,Math.sin(phase)),1.3)*Math.min(1,elapsed/120);
@@ -29,3 +32,5 @@ export function mouthGeometry(info,img,frame,pixels) {
  return {source:{x:(ox-ow/2)*cw,y:ch+(oy-oh/2)*ch,w:ow*cw,h:oh*ch},
  target:{x:(pixels-frame.w*scale)/2+((cx-w/2)*cw-frame.x)*scale,y:pixels-frame.h*scale+((cy-h/2)*ch-frame.y)*scale,w:w*cw*scale,h:h*ch*scale}};
 }
+
+export function speechPattern(message,emoticon=false){if(emoticon)return {duration:0,pauses:[]};const chars=graphemes(message||'');return {duration:Math.min(9000,Math.max(550,chars.length*95)),pauses:chars.flatMap((ch,i)=>/[,.!?，。！？\n]/u.test(ch)?[(i+1)*95]:[])};}

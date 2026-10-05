@@ -1,9 +1,11 @@
+import { graphemes, borderWidth, ReplayGuard, placeName } from './layout.mjs';
 import { mouthMix, mouthGeometry } from './mouth.mjs';
 import { characterInfo, renderResolution, textureResolution } from './characters.mjs';
 import { EmoteLayer } from './emotes.mjs';
 import { FrameCache, FrameMeter } from './rendering.mjs';
 import { Village } from './model.mjs';
 import { visualMotion, idleMotion, moveAgent } from './motion.mjs';
+const replay=new ReplayGuard();let sceneSession=null, nameRects=[];
 const emoteLayer = new EmoteLayer(document.querySelector('#emote-layer'));
 const canvas = document.querySelector('#village');
 const ctx = canvas.getContext('2d', { alpha: true });
@@ -102,12 +104,14 @@ addEventListener('message', event => { if (preview && event.source === parent &&
 let status = 'idle', preview = new URLSearchParams(location.search).has('preview'), loaded = false, previous = performance.now();
 const connection = new EventSource('/events');
 connection.addEventListener('snapshot', e => {
-  const data = JSON.parse(e.data); village.configure(data.settings); loadCharacter(data.settings.character); resize(); status = data.status.state;
-  village.clear(); for (const chat of data.recent) village.chat(chat, performance.now()); loaded = true;
+  const data=JSON.parse(e.data),fresh=!loaded||sceneSession!==data.sessionId;
+  if(fresh){village.clear();replay.clear();sceneSession=data.sessionId;}
+  village.configure(data.settings);loadCharacter(data.settings.character);resize();status=data.status.state;
+  for(const chat of data.recent)if(replay.accept(chat,performance.now()))village.chat(chat,performance.now());loaded=true;
 });
 connection.addEventListener('settings', e => { textureCache.clear(); textCache.clear(); widthCache.clear(); const data=JSON.parse(e.data); const qualityChanged=data.renderQuality !== village.settings.renderQuality; village.configure(data); loadCharacter(data.character); if (qualityChanged) resize(); });
 connection.addEventListener('filter', e => village.configure(JSON.parse(e.data)));
-connection.addEventListener('chat', e => { village.chat(JSON.parse(e.data), performance.now()); });
+connection.addEventListener('chat', e => { const chat=JSON.parse(e.data),now=performance.now();if(replay.accept(chat,now))village.chat(chat,now); });
 connection.addEventListener('clear', () => village.clear());
 connection.addEventListener('hide-user', e => village.hideUser(JSON.parse(e.data).userId));
 connection.addEventListener('status', e => { status = JSON.parse(e.data).state; });
@@ -127,11 +131,11 @@ function wrap(text, maxWidth, maxLines) {
   const key=ctx.font+'|'+maxWidth+'|'+maxLines+'|'+text, cached=textCache.get(key); if (cached) return cached;
   const remember=lines=>textCache.put(key,lines,(key.length+lines.join('').length)*2+32);
   const lines = []; let line = '';
-  for (const ch of text.replace(/\r/g, '')) {
+  for (const ch of graphemes(text.replace(/\r/g, ''))) {
     if (ch === '\n' || ctx.measureText(line + ch).width > maxWidth) {
       lines.push(line); line = ch === '\n' ? '' : ch;
       if (lines.length >= maxLines) {
-        let last = lines[maxLines - 1]; while (ctx.measureText(last + '…').width > maxWidth) last = last.slice(0, -1);
+        let last = lines[maxLines - 1]; while(last&&ctx.measureText(last+'…').width>maxWidth)last=graphemes(last).slice(0,-1).join('');
         lines[maxLines - 1] = last + '…'; return remember(lines);
       }
     } else line += ch;
@@ -156,7 +160,7 @@ function sprite(a, now, ambient = false) {
   const s = village.settings.size;
   const {info,poses,walking}=characterImages;
   const kind=info.id, h=s;
-  const motion = visualMotion(a, now, village.settings.extraMotion !== false, characterImages?.info.id || village.settings.character);
+  const motion = visualMotion(a, now, a.talking ? village.settings.chatReactions !== false : village.settings.extraMotion !== false, characterImages?.info.id || village.settings.character);
   const base = village.characterBase() + motion.bob;
   ctx.save(); ctx.translate(a.x, base - h / 2);
   const useWalk = motion.mode === 'walk' && walking.complete && walking.naturalWidth > 0;
@@ -172,10 +176,10 @@ function sprite(a, now, ambient = false) {
     // The second walking pose faces the other way in the atlas; normalize it.
     if (kind === 'shrimp' && motion.pose === 2) ctx.scale(-1, 1);
     drawFrame(poses, motion.pose, s, h, hue, motion.nextPose, motion.poseMix);
-    if(motion.mode==='talk') drawMouth(poses,info,s,hue,mouthMix(now,a.reactionAt??a.lastChat,a.seed,village.settings.extraMotion!==false));
+    if(motion.mode==='talk') drawMouth(poses,info,s,hue,mouthMix(now,a.reactionAt??a.lastChat,a.seed,village.settings.mouthMotion!==false,a.speech));
   }
   ctx.restore();
-  if (motion.effect && village.settings.extraMotion !== false) {
+  if (motion.effect && (a.talking ? village.settings.chatReactions !== false : village.settings.extraMotion !== false)) {
     ctx.save(); ctx.font = font(14); ctx.textAlign = 'center'; ctx.fillStyle = '#f1c29b';
     if (motion.effect === 'sleep') { ctx.fillStyle = '#c6cee9'; ctx.fillText('z Z', a.x + s * .31, base - h * .72 - Math.sin(now / 400) * 3); }
     else if (motion.effect === 'sparkle') { ctx.fillText('✦', a.x + s * .36, base - h * .75 + motion.bob); ctx.fillText('✧', a.x - s * .32, base - h * .55 + motion.bob); }
@@ -191,6 +195,7 @@ function sprite(a, now, ambient = false) {
     const w = Math.min(village.width - 8, textWidth(name) + px * 2), nh = fs + py * 2;
     const nx = Math.max(4, Math.min(village.width - w - 4, a.x - w / 2));
     const ny = c.namePosition === 'above' ? base - s * (c.spriteHeadRatio || .9) - (c.nameGap ?? 2) - nh : base + (c.nameGap ?? 2);
+    if(!placeName({x:nx,y:ny,w,h:nh},nameRects)){ctx.restore();return;}nameRects.push({x:nx,y:ny,w,h:nh});
     ctx.fillStyle = c.nameBg || '#fff3e9'; roundRect(nx, ny, w, nh, Math.min(c.nameRadius ?? 12, nh / 2)); ctx.fill();
     if (c.nameBorderWidth) { ctx.strokeStyle = c.nameBorder; ctx.lineWidth = c.nameBorderWidth; ctx.stroke(); }
     ctx.fillStyle = c.nameTextColor || '#815b58'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(name, nx + w / 2, ny + nh / 2);
@@ -199,7 +204,7 @@ function sprite(a, now, ambient = false) {
 }
 function drawBubble(b, now) {
   const a = village.agents.get(b.key); if (!a) return;
-  b = { ...b, y: b.y + visualMotion(a, now, village.settings.extraMotion !== false, characterImages?.info.id || village.settings.character).bob };
+  b = { ...b, y: b.y + visualMotion(a, now, a.talking ? village.settings.chatReactions !== false : village.settings.extraMotion !== false, characterImages?.info.id || village.settings.character).bob };
   ctx.save(); ctx.globalAlpha = Math.min(1, (now - b.started) / 140, (b.until - now) / 200);
   ctx.font = font(village.settings.fontSize);
   const c = village.settings, padding = c.bubblePadding ?? 16;
@@ -209,11 +214,11 @@ function drawBubble(b, now) {
   const anchor = Math.max(b.x + radius + 8, Math.min(b.x + b.w - radius - 8, a.x));
   ctx.shadowColor = 'rgba(30,14,27,.14)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 3;
   ctx.fillStyle = c.bubbleBg || '#fff9f4'; roundRect(b.x, b.y, b.w, b.h, radius); ctx.fill();
-  ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; ctx.lineWidth = c.bubbleBorderWidth ?? 2; ctx.strokeStyle = c.bubbleBorder || '#efc4b5';
-  if (ctx.lineWidth) ctx.stroke();
+  ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; const border=borderWidth(c.bubbleBorderWidth??2); if(border)ctx.lineWidth=border; ctx.strokeStyle = c.bubbleBorder || '#efc4b5';
+  if (border) ctx.stroke();
   const tipY = b.y + b.h + Math.min(10, c.bubbleGap ?? 10);
   ctx.beginPath(); ctx.moveTo(anchor - 7, b.y + b.h - 1); ctx.lineTo(a.x, tipY); ctx.lineTo(anchor + 7, b.y + b.h - 1); ctx.fill();
-  if (c.bubbleBorderWidth) { ctx.beginPath(); ctx.moveTo(anchor - 7, b.y + b.h); ctx.lineTo(a.x, tipY); ctx.lineTo(anchor + 7, b.y + b.h); ctx.stroke(); }
+  if (border) { ctx.beginPath(); ctx.moveTo(anchor - 7, b.y + b.h); ctx.lineTo(a.x, tipY); ctx.lineTo(anchor + 7, b.y + b.h); ctx.stroke(); }
   ctx.fillStyle = c.bubbleTextColor || '#59434d'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   if (b.chat.emoticon) {
     const size = Math.min(c.emoteSize || 88, b.w - padding * 2);
@@ -226,7 +231,7 @@ function render(now) {
   if (preview && (previewPaused || document.hidden)) { previous = now; frameMeter.reset(); requestAnimationFrame(render); return; }
   const drawStarted = performance.now();
   const dt = Math.min(.05, Math.max(0, (now - previous) / 1000)); previous = now;
-  village.step(now, dt, measure);
+  village.step(now, dt, measure); nameRects=[];
   const paintTop = Math.max(0, Math.min(village.characterBase() - village.settings.size - 64, ...village.bubbles.map(b => b.y - 48)));
   const clearTop = Math.min(lastPaintTop, paintTop);
   ctx.clearRect(0, clearTop, village.width, village.height - clearTop);
@@ -240,7 +245,7 @@ function render(now) {
     moveAgent(a, now, dt, { speed: village.settings.speed, size: village.settings.size, width: village.width, character: village.settings.character }, a.motion !== 'walk');
     sprite(a, now, true);
   }
-  for (const a of village.agents.values()) sprite(a, now);
+  for (const a of [...village.agents.values()].sort((a,b)=>Number(b.talking)-Number(a.talking))) sprite(a, now);
   for (const b of village.bubbles) drawBubble(b, now);
   emoteLayer.retain(new Set(village.bubbles.filter(b => b.chat.emoticon).map(b => b.key)));
   // Read-only diagnostics used for testing; no chat DOM injection or HTML rendering.
@@ -248,10 +253,10 @@ function render(now) {
   if (now - lastDiagnostics >= 500) {
   lastDiagnostics = now;
   const performanceStats = frameMeter.snapshot();
-  window.overlayStats = { characters: village.agents.size, ambientCharacters: ambientCount, bubbles: village.bubbles.length, queued: village.queue.size, dropped: village.dropped, status, ...performanceStats, textureCacheBytes: textureCache.bytes, character:characterImages?.info.id, renderQuality:village.settings.renderQuality,
+  window.overlayStats = { characters: village.agents.size, ambientCharacters: ambientCount, bubbles: village.bubbles.length, queued: village.queue.size+village.entrants.size, spaceBlocked:village.spaceBlocked, dropped: village.dropped, status, ...performanceStats, textureCacheBytes: textureCache.bytes, character:characterImages?.info.id, renderQuality:village.settings.renderQuality,
     agents: [...village.agents.values()].map(a => ({ userId: a.userId, nickname: a.nickname, x: a.x, talking: a.talking })),
     boxes: village.bubbles.map(b => ({ x: b.x, y: b.y, w: b.w, h: b.h, nickname: b.chat.nickname, message: b.chat.message })) };
-  if (preview) parent.postMessage({ type: 'shrimp-performance', ...performanceStats }, location.origin);
+  if (preview) parent.postMessage({ type: 'shrimp-performance',queued:village.queue.size+village.entrants.size,dropped:village.dropped,spaceBlocked:village.spaceBlocked, ...performanceStats }, location.origin);
   }
   requestAnimationFrame(render);
 }

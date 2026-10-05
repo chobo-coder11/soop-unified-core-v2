@@ -14,14 +14,15 @@ export function ogqEmote(payload = {}) {
 // Keep img elements alive while their bubble is alive. Reassigning src every
 // animation frame would restart animated WebP/GIF playback.
 export class EmoteLayer {
-  constructor(root, { makeImage = () => new Image() } = {}) { this.root = root; this.makeImage = makeImage; this.assets = new Map(); this.nodes = new Map(); }
+  constructor(root, { makeImage = () => new Image(), now = () => Date.now(), retryMs=15000 } = {}) { this.now=now;this.retryMs=retryMs;this.failures=new Map();this.root = root; this.makeImage = makeImage; this.assets = new Map(); this.nodes = new Map(); }
   asset(emote) {
     const sources = emote.sources?.map(safeEmoteUrl).filter(Boolean) || [];
     if (!sources.length) return { ready: true, failed: true };
-    const key = sources.join('|'); let asset = this.assets.get(key); if (asset) { this.assets.delete(key); this.assets.set(key,asset); return asset; }
+    const key = sources.join('|'); let asset = this.assets.get(key); if(asset?.failed&&this.now()>=(asset.retryAt||0)&&asset.attempts<3){this.assets.delete(key);asset=null;}
+    if (asset) { this.assets.delete(key); this.assets.set(key,asset); return asset; }
     const image = this.makeImage(); image.referrerPolicy = 'no-referrer'; image.decoding = 'async';
-    asset = { ready: false, failed: false, image, src: '', index: 0, timer: null };
-    const finish = failed => { clearTimeout(asset.timer); asset.ready = true; asset.failed = failed; if (!failed) asset.src = image.src; };
+    asset = { ready: false, failed: false, image, src: '', index: 0, timer: null, attempts:(this.failures.get(key)||0)+1 };
+    const finish = failed => { clearTimeout(asset.timer); asset.ready = true; asset.failed = failed;if(failed){asset.retryAt=this.now()+this.retryMs*asset.attempts;this.failures.set(key,asset.attempts);while(this.failures.size>64)this.failures.delete(this.failures.keys().next().value);}else this.failures.delete(key); if (!failed) asset.src = image.src; };
     const next = () => {
       clearTimeout(asset.timer); if (asset.ready) return;
       if (asset.index >= sources.length) { finish(true); return; }

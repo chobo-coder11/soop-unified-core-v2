@@ -9,7 +9,7 @@ test('chatting shrimp stops, keeps identity through nickname changes, then resum
   const a = v.agents.get('channel:one'), x = a.x;
   v.step(2000, 1, measure); assert.equal(a.x, x); assert.equal(a.talking, true);
   v.chat(chat('one', '새닉네임', '다시 말해요'), 2100); assert.equal(v.agents.size, 1); assert.equal(a.nickname, '새닉네임'); assert.equal(v.bubbles.length, 1);
-  assert.equal(v.bubbles[0].chat.message, '다시 말해요');
+  v.step(2100,0,measure);assert.equal(v.bubbles[0].chat.message, '다시 말해요');
   v.step(9000, 1, measure); assert.equal(a.talking, false); assert.notEqual(a.x, x);
 });
 test('crowded bubble rectangles never overlap or leave viewport', () => {
@@ -45,7 +45,7 @@ test('attached bubbles stay close to the head and reflow after style changes', (
   assert.equal(b.lane, 0);
   assert.equal(b.y + b.h, v.characterBase() - DEFAULTS.size * .9 - DEFAULTS.bubbleGap);
   v.configure({ fontSize: 30, bubblePadding: 24, namePosition: 'above', nameFontSize: 26 });
-  assert.equal(v.bubbles.length, 0); assert.equal(v.queue.size, 1);
+  assert.equal(v.bubbles.length, 1); assert.equal(v.bubbles[0].layoutDirty,true);
   v.step(200, 0, () => ({ w: 340, h: 110, lines: ['재배치'] }));
   assert.equal(v.bubbles[0].w, 340);
   assert.ok(v.bubbles[0].y + 110 < v.characterBase() - DEFAULTS.size * .9 - 26);
