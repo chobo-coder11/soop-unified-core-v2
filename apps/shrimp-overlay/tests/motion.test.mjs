@@ -34,7 +34,7 @@ test('movement and gait stay consistent at 30fps and 60fps', () => {
   function run(fps) { const a = { x: 320, dir: 1, speed: 1, phase: 0, velocity: 28 }; for (let i=0; i<fps; i++) moveAgent(a, i*1000/fps, 1/fps, config); return a; }
   const a = run(30), b = run(60);
   assert.ok(Math.abs(a.x-b.x) < .0001); assert.ok(Math.abs(a.phase-b.phase) < .0001);
-  assert.ok(a.phase / (Math.PI * 2) > 1.4);
+  assert.ok(a.phase / (Math.PI * 2) > .8);
 });
 
 test('idle variety waits for deceleration and chat reaction plays once', async () => {

@@ -1,3 +1,4 @@
+import { walkingRegion } from './rig.mjs';
 import { graphemes, borderWidth, ReplayGuard, placeName } from './layout.mjs';
 import { mouthMix, mouthGeometry } from './mouth.mjs';
 import { characterInfo, renderResolution, textureResolution } from './characters.mjs';
@@ -52,6 +53,45 @@ function drawFrame(img, index, size, h, hue, nextIndex = index, mix = 0) {
   g.globalCompositeOperation = 'lighter'; g.globalAlpha = mix; g.drawImage(next,0,0);
   g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
   ctx.drawImage(blendSurface, -size / 2, h / 2 - size, size, size);
+}
+const rigSurface=document.createElement('canvas'), partSurface=document.createElement('canvas');
+function drawWalking(img, row, info, motion, size, hue, direction) {
+  const stable=frameTexture(img,row+1,size,hue);
+  if(!stable)return;
+  // 128 samples per full stride exceed the refresh rate at the normal pace.
+  // The body transform still updates every rAF; repeated limb composites reuse
+  // a bounded texture instead of allocating or compositing for every viewer.
+  const sample=Math.round(motion.walkPhase*32)%128,index=Math.floor(sample/32),t=(sample%32)/32,mix=t*t*(3-2*t);
+  const cacheKey=`rig:${img.src}:${row}:${stable.width}:${hue}:${sample}`;
+  const cached=stable.width<=192?textureCache.get(cacheKey):null;
+  if(cached){ctx.drawImage(cached,-size/2,-size/2,size,size);return;}
+  const first=frameTexture(img,row+index,size,hue);
+  const next=frameTexture(img,row+(index+1)%4,size,hue);
+  if(!first||!next)return;
+  const pixels=stable.width,region=walkingRegion(info.profile,direction);
+  const key=`rig-mask:${info.profile}:${direction}:${pixels}`;
+  let mask=textureCache.get(key);
+  if(!mask){
+    mask=document.createElement('canvas');mask.width=mask.height=pixels;
+    const g=mask.getContext('2d'),horizontal=info.profile==='swim';
+    const start=(horizontal?region.x:region.y)*pixels,end=start+(horizontal?region.w:region.h)*pixels;
+    const gradient=g.createLinearGradient(horizontal?start:0,horizontal?0:start,horizontal?end:0,horizontal?0:end);
+    // Feather the joint instead of cutting a horizontal seam through the art.
+    gradient.addColorStop(0,start===0?'black':'transparent');gradient.addColorStop(.18,'black');
+    gradient.addColorStop(.82,'black');gradient.addColorStop(1,end>=pixels?'black':'transparent');
+    g.fillStyle=gradient;g.fillRect(region.x*pixels,region.y*pixels,region.w*pixels,region.h*pixels);
+    textureCache.put(key,mask,pixels*pixels*4);
+  }
+  if(rigSurface.width!==pixels){rigSurface.width=rigSurface.height=pixels;partSurface.width=partSurface.height=pixels;}
+  const part=partSurface.getContext('2d');part.clearRect(0,0,pixels,pixels);
+  part.globalCompositeOperation='source-over';part.globalAlpha=1-mix;part.drawImage(first,0,0);
+  part.globalCompositeOperation='lighter';part.globalAlpha=mix;part.drawImage(next,0,0);
+  part.globalAlpha=1;part.globalCompositeOperation='destination-in';part.drawImage(mask,0,0);part.globalCompositeOperation='source-over';
+  const g=rigSurface.getContext('2d');g.clearRect(0,0,pixels,pixels);g.drawImage(stable,0,0);
+  g.globalCompositeOperation='destination-out';g.drawImage(mask,0,0);
+  g.globalCompositeOperation='lighter';g.drawImage(partSurface,0,0);g.globalCompositeOperation='source-over';
+  if(pixels<=192){const tile=document.createElement('canvas');tile.width=tile.height=pixels;tile.getContext('2d').drawImage(rigSurface,0,0);textureCache.put(cacheKey,tile,pixels*pixels*4);}
+  ctx.drawImage(rigSurface,-size/2,-size/2,size,size);
 }
 function drawMouth(img, info, size, hue, amount) {
   if (amount<=0) return;
@@ -171,7 +211,7 @@ function sprite(a, now, ambient = false) {
   ctx.globalAlpha = ambient ? (preview ? .8 : 1) : Math.min(1, (now - a.born) / 450);
   if (useWalk) {
     const row = info.walkOffset + (a.dir > 0 ? 0 : 4);
-    drawFrame(walking, motion.walkFrame + row, s, h, hue, motion.walkNextFrame + row, motion.walkMix);
+    drawWalking(walking,row,info,motion,s,hue,a.dir);
   } else {
     // The second walking pose faces the other way in the atlas; normalize it.
     if (kind === 'shrimp' && motion.pose === 2) ctx.scale(-1, 1);

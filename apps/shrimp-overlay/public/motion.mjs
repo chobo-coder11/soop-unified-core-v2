@@ -1,4 +1,5 @@
 import { characterInfo } from './characters.mjs';
+import { gaitTiming, gaitDetail, jumpDetail } from './rig.mjs';
 export const POSES = Object.freeze({ idle: 0, walkA: 1, walkB: 2, wave: 3, talk: 4, jump: 5, sleep: 6, laugh: 7 });
 export function reactionFor(message) {
   if (/!점프|!점프해|야호|신난다|🎉/.test(message)) return 'jump';
@@ -38,7 +39,7 @@ export function moveAgent(a, now, dt, { speed, size, width, character = 'shrimp'
   const distance = (old + a.velocity) / 2 * dt;
   a.x = Math.max(margin, Math.min(width - margin, a.x + distance));
   // Step phase is tied to distance travelled, so feet do not run while sliding slowly.
-  a.phase += Math.abs(distance) / Math.max(12, size * ({waddle:.14,hop:.22,hover:.25,swim:.26,heavy:.2,scoot:.21}[characterInfo(character).profile] || .17)) * Math.PI * 2;
+  a.phase += Math.abs(distance) / Math.max(12, size * gaitTiming(characterInfo(character).profile)) * Math.PI * 2;
   if (paused && a.motionPending && Math.abs(a.velocity) < .4) {
     a.motionPending = false; const delay = now - a.motionStarted;
     a.motionStarted = now; a.motionUntil = now + (ACTION_MS[a.motion] || 1000); a.nextMotionAt += delay;
@@ -58,20 +59,19 @@ export function visualMotion(a, now, enabled = true, character = 'shrimp') {
     pose = Math.floor(a.phase / Math.PI * 2) % 2 ? POSES.walkA : POSES.walkB; nextPose = pose;
     const strength = Math.min(1, Math.abs(a.velocity || 0) / 20);
     const profile = characterInfo(character).profile;
-    const gait = {waddle:[1.8,.022],hop:[3.2,.015],hover:[1.2,.012],swim:[.8,.025],heavy:[.9,.009],scoot:[.55,.018],sway:[1,.025]}[profile] || [1.3,.012];
-    bob = (profile === 'hover' ? -5-Math.sin(a.phase)*gait[0] : -Math.abs(Math.sin(a.phase))*gait[0])*strength; rotation=Math.sin(a.phase)*gait[1]*strength;
+    ({bob,rotation}=gaitDetail(profile,a.phase,strength));
   } else if (mode === 'talk') {
     // Hold the speaking artwork: oscillating between differently shaped frames
     // made the entire character appear to inflate and deflate.
     pose = POSES.idle; nextPose = POSES.idle; poseMix = 0;
     bob = 0;
   } else if (mode === 'wave') {
-    nextPose = POSES.wave; poseMix = envelope * (.7 + .3*Math.sin(since/160)); rotation = Math.sin(since/180)*.025*envelope; effect='hello';
+    nextPose = POSES.wave; poseMix = envelope; rotation = Math.sin(since/180)*.025*envelope; effect='hello';
   } else if (mode === 'laugh') {
-    nextPose = POSES.laugh; poseMix = envelope * (.75 + .25*Math.sin(since/150)); bob=-Math.abs(Math.sin(since/180))*2.5*envelope; effect='sparkle';
+    nextPose = POSES.laugh; poseMix = envelope; bob=-Math.abs(Math.sin(since/180))*2.5*envelope; effect='sparkle';
   } else if (mode === 'jump' || mode === 'hop') {
     const lift = Math.sin(progress*Math.PI); nextPose=POSES.jump;poseMix=smooth(lift)*.9;
-    bob = -lift * (mode === 'jump' ? 24 : 10); sy=1 + lift*.035 - (1-lift)*.025*envelope; sx=2-sy;
+    ({bob,sx,sy}=jumpDetail(progress,mode==='jump'?24:10));
     if (mode === 'jump') effect='sparkle';
   } else if (mode === 'sleep') {
     nextPose=POSES.sleep;poseMix=envelope; sy=1+Math.sin(since/600)*.012*envelope;effect='sleep';
@@ -99,5 +99,5 @@ export function visualMotion(a, now, enabled = true, character = 'shrimp') {
   }
   const framePhase = ((a.phase / (Math.PI * 2) * 4) % 4 + 4) % 4;
   const walkFrame = Math.floor(framePhase), fraction = framePhase-walkFrame;
-  return { mode, pose, nextPose, poseMix, walkFrame, walkNextFrame:(walkFrame+1)%4, walkMix:smooth(fraction), bob, rotation, sx, sy, effect, faceForward:talking || mode !== 'walk' };
+  return { mode, pose, nextPose, poseMix, walkPhase:framePhase, walkFrame, walkNextFrame:(walkFrame+1)%4, walkMix:smooth(fraction), bob, rotation, sx, sy, effect, faceForward:talking || mode !== 'walk' };
 }

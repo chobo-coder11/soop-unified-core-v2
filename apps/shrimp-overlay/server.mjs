@@ -28,7 +28,7 @@ function broadcast(type, data) {
   for (const res of clients) { if (res.writableLength > 262144) { res.destroy(); clients.delete(res); } else res.write(payload); }
 }
 function snapshot(admin = false) {
-  return { sessionId, service: 'soop-shrimp-overlay', version: '1.5.0', settings: publicSettings(settings), status: bridge.status, running, demo: Boolean(demo),
+  return { sessionId, service: 'soop-shrimp-overlay', version: '1.6.0', settings: publicSettings(settings), status: bridge.status, running, demo: Boolean(demo),
     total, recent: recent.filter(x => Date.now() - x.at < 20000), ...(admin ? { token: TOKEN, overlayUrl: `http://127.0.0.1:${PORT}/overlay` } : {}) };
 }
 function clearScene() { recent = []; broadcast('clear', {}); }
@@ -130,7 +130,7 @@ async function mutate(route, value) {
 }
 const allowedHosts = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`, `[::1]:${PORT}`]);
 const staticRoutes = new Map([
-  ['/', 'public/index.html'], ['/overlay', 'public/overlay.html'], ['/overlay.js', 'public/overlay.js'], ['/model.mjs', 'public/model.mjs'], ['/layout.mjs', 'public/layout.mjs'], ['/presets.mjs', 'public/presets.mjs'], ['/mouth.mjs', 'public/mouth.mjs'], ['/motion.mjs', 'public/motion.mjs'], ['/rendering.mjs', 'public/rendering.mjs'], ['/emotes.mjs', 'public/emotes.mjs'], ['/characters.mjs', 'public/characters.mjs'],
+  ['/', 'public/index.html'], ['/overlay', 'public/overlay.html'], ['/overlay.js', 'public/overlay.js'], ['/model.mjs', 'public/model.mjs'], ['/layout.mjs', 'public/layout.mjs'], ['/presets.mjs', 'public/presets.mjs'], ['/mouth.mjs', 'public/mouth.mjs'], ['/rig.mjs', 'public/rig.mjs'], ['/motion.mjs', 'public/motion.mjs'], ['/rendering.mjs', 'public/rendering.mjs'], ['/emotes.mjs', 'public/emotes.mjs'], ['/characters.mjs', 'public/characters.mjs'],
   ['/admin.js', 'public/admin.js'], ['/style.css', 'public/style.css'], ['/assets/shrimp.png', 'public/assets/shrimp.png'], ['/assets/duck-atlas.png', 'public/assets/duck-atlas.png'],
   ['/assets/shrimp-poses.png', 'public/assets/shrimp-poses.png'], ['/assets/shrimp-walk.png', 'public/assets/shrimp-walk.png'],
   ['/assets/fonts/Gaegu-Regular.woff2', 'public/assets/fonts/Gaegu-Regular.woff2'], ['/assets/fonts/Jua-Regular.woff2', 'public/assets/fonts/Jua-Regular.woff2']

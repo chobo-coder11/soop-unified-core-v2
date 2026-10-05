@@ -3,7 +3,7 @@ import { graphemes } from './layout.mjs';
 // Closed artwork remains the body; only this small facial region can change.
 export const MOUTHS = Object.freeze({
  shrimp:{closed:[.427,.554,.10,.09],open:[.465,.505,.10,.09]},
- duck:{closed:[.537,.54,.20,.14],open:[.568,.484,.20,.14]},
+ duck:{closed:[.537,.561,.20,.16],open:[.542,.517,.20,.16]},
  sparrow:{closed:[.535,.477,.14,.13],open:[.568,.41,.14,.13]},
  seal:{closed:[.595,.683,.14,.09],open:[.565,.666,.14,.09]},
  tissue:{closed:[.58,.632,.105,.085],open:[.598,.562,.105,.085]},
