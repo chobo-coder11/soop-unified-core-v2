@@ -68,7 +68,7 @@ export class Village {
       const rect = this.findSpace(a.x, measured);
       if (!rect) continue;
       this.bubbles.push({ key, chat, ...rect, lines: measured.lines, until: now + this.settings.bubbleSeconds * 1000, started: now });
-      this.queue.delete(key); a.talking = true;
+      this.queue.delete(key); a.talking = true; a.reactionAt = now;
     }
   }
   characterBase() {

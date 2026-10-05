@@ -85,3 +85,5 @@ OGQ_EMOTICON 전용 이벤트를 구독하고 내장 코어에서 발신자 ID·
 범위: OGQ 전용 이벤트와 일반 유니코드 이모지. 일반 채팅의 /이름/ 형태인 별도 시그니처 이모티콘은 아직 이미지로 변환하지 않습니다. 모든 OGQ 상품의 실제 CDN 접근 및 OBS 내 애니메이션은 미검증입니다.
 
 참고한 원본: https://github.com/getCurrentThread/soopapi/blob/develop/lib/src/main/java/com/github/getcurrentthread/soopapi/event/model/OGQEmoticonEvent.java ; 정적 이미지 https://ogqmarket.sooplive.com/emoticon/64b1213dfbb7b ; 움직이는 이미지 https://ogqmarket.sooplive.com/emoticon/646e3b2843650 .
+
+동작: 산책 중 인사·점프·졸기·웃기·두리번거리기·기지개·작은 깡충·갸웃을 섞습니다. 먼저 감속해 멈춘 후 행동 시간을 시작하며, 행동의 처음과 끝에 부드러운 곡선을 적용하고 포즈 사이를 보간합니다. 채팅 반응은 한 번 후 말하는 자세로 돌아오며 OGQ 로딩 대기 후 실제 말풍선이 표시될 때 시작합니다. 새 동작 일부는 기존 포즈의 미세한 회전·신축으로 표현하며 개별 팔다리 리깅 애니메이션은 아닙니다.

@@ -131,13 +131,14 @@ function sprite(a, now, ambient = false) {
   } else if (useAtlas) {
     // The second walking pose faces the other way in the atlas; normalize it.
     if (motion.pose === 2) ctx.scale(-1, 1);
-    drawFrame(atlas, motion.pose, s, h, hue);
+    drawFrame(atlas, motion.pose, s, h, hue, motion.nextPose, motion.poseMix);
   } else ctx.drawImage(image, -s / 2, -h / 2, s, h);
   ctx.restore();
   if (motion.effect && village.settings.extraMotion !== false) {
     ctx.save(); ctx.font = font(14); ctx.textAlign = 'center'; ctx.fillStyle = '#f1c29b';
     if (motion.effect === 'sleep') { ctx.fillStyle = '#c6cee9'; ctx.fillText('z Z', a.x + s * .31, base - h * .72 - Math.sin(now / 400) * 3); }
     else if (motion.effect === 'sparkle') { ctx.fillText('✦', a.x + s * .36, base - h * .75 + motion.bob); ctx.fillText('✧', a.x - s * .32, base - h * .55 + motion.bob); }
+    else if (motion.effect === 'question') { ctx.fillText('?', a.x + s * .3, base - h * .83); }
     else if (motion.effect === 'hello') { ctx.strokeStyle = '#efc0ae'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(a.x + s * .34, base - h * .68, 8, -.8, .8); ctx.stroke(); }
     ctx.restore();
   }

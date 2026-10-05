@@ -2,13 +2,13 @@
 
 검증 환경: Linux, Node.js 24.19.0. SOOP Unified Core 기준 커밋 `a4e5c9f6e7fb0480a4de323c8e8cd8484ceb1a5d`.
 
-GitHub Actions Shrimp Overlay도 Node.js 22/24 빌드·테스트 성공: https://github.com/chobo-coder11/soop-unified-core-v2/actions/runs/37261076214
+초기 v1.0.0의 GitHub Actions Shrimp Overlay Node.js 22/24 빌드·테스트 성공 기록: https://github.com/chobo-coder11/soop-unified-core-v2/actions/runs/37261076214
 
 독립 ZIP을 새 임시 폴더에 풀어 launch.mjs 실행, 관리/오버레이/이미지 HTTP 응답, 테스트 채팅 입력, 종료 요청을 확인했습니다.
 
 ## 통과
 
-`node --test tests/*.test.mjs`: **21개 통과 / 0개 실패**.
+`node --test tests/*.test.mjs`: **22개 통과 / 0개 실패**.
 
 - Canonical CHAT_MESSAGE에서 계정 ID, 닉네임, 메시지 추출.
 - 다른 방송, 귓속말, 20초보다 오래된 복구 메시지 제외.
@@ -50,3 +50,5 @@ GitHub Actions Shrimp Overlay도 Node.js 22/24 빌드·테스트 성공: https:/
 OGQ 109 패킷 → 내장 코어 디코더 → 오버레이 이벤트 정규화, 전용 WS 구독과 SSE 전달, 텍스트 없는 OGQ 이벤트, WebP 실패 시 PNG 대체, URL 제한, 이미지 로딩 중 큐 대기와 기존 텍스트 말풍선 크기 변경을 검증했습니다. 모의 이미지 요소 600번 갱신 시 같은 요소를 유지하고 src는 한 번만 설정하는 것을 확인했습니다. 실제 브라우저에서 움직이는 OGQ 프레임을 육안 검증한 것은 아닙니다.
 
 숨김 계정 ID는 사용자 확인으로 정상 동작하는 것으로 정리했으며 이번 변경에서 동작을 변경하지 않았습니다.
+
+추가 동작의 감속 후 시작, 8종 자율 행동 분포, 반응 종료 후 말하기 복귀, 행동 시작·끝의 회전/신축 곡선도 검증했습니다.

@@ -36,3 +36,23 @@ test('movement and gait stay consistent at 30fps and 60fps', () => {
   assert.ok(Math.abs(a.x-b.x) < .0001); assert.ok(Math.abs(a.phase-b.phase) < .0001);
   assert.ok(a.phase / (Math.PI * 2) > 1.4);
 });
+
+test('idle variety waits for deceleration and chat reaction plays once', async () => {
+  const { idleMotion, IDLE_ACTIONS, ACTION_MS } = await import('../public/motion.mjs');
+  const a = { seed:0,x:320,dir:1,velocity:28,phase:0,nextMotionAt:0 };
+  idleMotion(a,100,true); assert.equal(a.motionPending,true);
+  for (let i=0;i<10;i++) moveAgent(a,100+i*50,.05,config,true);
+  assert.equal(a.motionPending,false); assert.ok(a.motionStarted > 100);
+  assert.equal(a.motionUntil-a.motionStarted,ACTION_MS[a.motion]);
+  const seen = new Set();
+  for (let i=0;i<16;i++) { a.nextMotionAt=0;a.motionUntil=0;idleMotion(a,10000+i*3000,true);seen.add(a.motion); }
+  assert.deepEqual([...seen].sort(),[...IDLE_ACTIONS].sort());
+  assert.equal(visualMotion({ ...a,talking:true,reaction:'jump',reactionAt:0 },5000).mode,'talk');
+  for (const action of ['lookaround','stretch','hop','curious','wave','sleep']) {
+    const start=visualMotion({ ...a,velocity:0,motion:action,motionStarted:0 },0);
+    const end=visualMotion({ ...a,velocity:0,motion:action,motionStarted:0 },ACTION_MS[action]);
+    assert.ok(Math.abs(start.bob) < .00001 && Math.abs(end.bob) < .00001);
+    assert.equal(start.rotation,0);assert.ok(Math.abs(end.rotation) < .00001);
+    assert.equal(start.sx,1);assert.equal(end.sx,1);
+  }
+});
